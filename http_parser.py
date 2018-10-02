@@ -18,18 +18,39 @@ class HTTPParseState(Enum):
     SUCCESS = 3
 
 
-class HTTPParseResult:
+class HTTPLocation:
+    """An HTTP location. Protocol and domain are guaranteed to be lower-case."""
+    def __init__(self):
+        self.protocol: str = None
+        self.domain: str = None
+        self.path: str = None
+        self.url: str = None
+        self.port: int = None
+
+
+class HTTPRequestHeader:
+    """
+    Parsing result of an HTTPParser.
+    """
     def __init__(self):
         self.method: str = None
-        self.url: str = None
+        self.location: HTTPLocation = None
         self.version: str = None
         """This version string contains the whole HTTP/x.y part."""
         self.headers: List[Tuple[str, str]] = []
+        self.consumed: str = b""
+
+    def reconstruct(self)->str:
+        """
+        Reconstructing the header in string.
+        """
+        raise NotImplementedError()
 
 
 class HTTPParser:
     def __init__(self):
         self._parse_result = None
+        self._result_ready = False
 
     def feed(self, s: Ref)->HTTPParseState:
         """
@@ -40,12 +61,12 @@ class HTTPParser:
         """
         pass
 
-    def get_result(self)->HTTPParseResult:
+    def get_result(self)->HTTPRequestHeader:
         """
         Get the parsing result.
         :raise HTTPParserNoResultError
         :return: Parsing result.
         """
-        if not self._parse_result:
+        if not self._result_ready:
             raise HTTPParserNoResultError();
         return self._parse_result
