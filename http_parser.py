@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from enum import Enum
-from typing import List, Tuple
+from typing import List, Tuple, Union
 
 from utils import Ref
 
@@ -18,6 +18,23 @@ class HTTPParseState(Enum):
     SUCCESS = 3
 
 
+class HTTPBodyEncoding(Enum):
+    CONTENT_LENGTH = 1
+    CHUNKED = 2
+
+
+class HTTPBodyParser:
+    def __init__(self, encoding: HTTPRequestHeader):
+        raise NotImplementedError()
+
+    def feed(self, s: str)->int:
+        """
+        Feed a string to the parser.
+        :return HTTPParseState.PARTIAL if more are expected; HTTPParseState.ERROR if an error occured; an integer n if only n characters are consumed, and the rest belongs to the next request.
+        """
+        pass
+
+
 class HTTPLocation:
     """An HTTP location. Protocol and domain are guaranteed to be lower-case."""
     def __init__(self):
@@ -30,7 +47,7 @@ class HTTPLocation:
 
 class HTTPRequestHeader:
     """
-    Parsing result of an HTTPParser.
+    Parsing result of an HTTPHeaderParser.
     """
     def __init__(self):
         self.method: str = None
@@ -47,26 +64,16 @@ class HTTPRequestHeader:
         raise NotImplementedError()
 
 
-class HTTPParser:
+class HTTPHeaderParser:
     def __init__(self):
         self._parse_result = None
         self._result_ready = False
 
-    def feed(self, s: Ref)->HTTPParseState:
+    def feed(self, s: Ref)->Union[HTTPParseState, HTTPLocation]:
         """
         Feed the reference of a string into the parser for parsing. After this methods complete, if there are
         unconsumed characters, they'll be stored back into s.
         :param s: Reference of a string to be fed into the parser.
-        :return: State of the parsing afterward.
+        :return: State of the parsing afterward, or the result.
         """
         pass
-
-    def get_result(self)->HTTPRequestHeader:
-        """
-        Get the parsing result.
-        :raise HTTPParserNoResultError
-        :return: Parsing result.
-        """
-        if not self._result_ready:
-            raise HTTPParserNoResultError();
-        return self._parse_result

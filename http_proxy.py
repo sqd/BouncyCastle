@@ -38,7 +38,8 @@ class _WorkerSocket(EventConsumer):
         """If the client is ready to accept data."""
         self._state = _WorkerState.CREATED
         self._server = server
-        self._http_parser = HTTPParser()
+        self._http_header_parser: HTTPHeaderParser = None
+        self._http_body_parser: HTTPBodyParser = None
         self._cur_session: _WorkerSession = None
         self._bfc = bfc
 
@@ -48,10 +49,10 @@ class _WorkerSocket(EventConsumer):
     def events(self):
         yield self._client_socket.fileno(), select.EPOLLIN|select.EPOLLOUT|select.EPOLLET
 
-    @clsmethod
-    def _transform_proxy_header(parse_result: HTTPRequestHeader):
+    @classmethod
+    def _transform_proxy_header(header: HTTPRequestHeader)->HTTPRequestHeader:
         """
-        Transform an proxy HTTPRequestHeader to none-proxy HTTPRequestHeader. This method changes the parameter in-place.
+        Transform an proxy HTTPRequestHeader to none-proxy HTTPRequestHeader.
         """
         raise NotImplementedError()
 
@@ -86,32 +87,48 @@ class _WorkerSocket(EventConsumer):
             # We care only when we have something to parse.
             return
         ref_client_sent_buf = Ref(self._client_send_buf)
-        parse_state = self._http_parser.feed(ref_client_sent_buf)
+        self._http_header_parser = HTTPHeaderParser()
+        parse_result = self._http_header_parser.feed(ref_client_sent_buf)
         self._client_send_buf = ref_client_sent_buf.v
 
-        if parse_state == HTTPParseState.PARTIAL:
+        if parse_result == HTTPParseState.PARTIAL:
             return
-        elif parse_state == HTTPParseState.ERROR:
+        elif parse_result == HTTPParseState.ERROR:
             self.terminate()
-        elif parse_state == HTTPParseState.SUCCESS:
-            parse_result = self._http_parser.get_result()
-            if parse_result.method != "CONNECT":
+        elif isinstance(parse_result, HTTPRequestHeader):
+            header = parse_result
+            if header.method != "CONNECT":
                 # if we are not doing HTTP CONNECT, then the header consumed is also a part of the request. (after conversion to non-proxy header)
-                _WorkerSocket._transform_proxy_header(parse_result)
-                self._client_recv_buf = parse_result.reconstruct() + self._client_recv_buf
+                new_header = _WorkerSocket._transform_proxy_header(header)
+                self._client_recv_buf = new_header.reconstruct() + self._client_recv_buf
 
-            # This is the best we can do. Because HTTPS would use CONNECT anyway.
-            port = parse_result.location.port if parse_result.location.port else 80
-            self._cur_session = _WorkerSession((parse_result.location.host, port), self, self._bfc)
+            # This is the best we can do. Because HTTPS should use CONNECT anyway.
+            port = header.location.port if header.location.port else 80
+            self._cur_session = _WorkerSession((header.location.host, port), self, self._bfc)
             self._state = _WorkerState.RELAYING
+            self._http_body_parser = HTTPBodyParser(header)
             self._handle_relaying(ev)
 
     def _handle_relaying(self, ev: int):
         """Event handler for state == RELAYING"""
         if ev & select.EPOLLIN:
             # I got some data from the client, I want to send it to the BFC.
-            self._cur_session.send(self._client_recv_buf)
-            self._client_recv_buf = b""
+            # but first, I need to determine if all the data belong to the current session.
+            parse_result = self._http_body_parser.feed(self._client_recv_buf)
+            if parse_result = HTTPParseState.PARTIAL:
+                self._cur_session.send(self._client_recv_buf)
+                self._client_recv_buf = b""
+            elif parse_result == HTTPParseState.ERROR:
+                self.terminate()
+            elif isinstance(parse_result, int):
+                # part of the buffer is the tail of the current session.
+                self._cur_session.send(self._client_recv_buf[:parse_result])
+                # the rest belongs to the coming new session.
+                self._client_recv_buf = self._client_recv_buf[parse_result:]
+
+                self._cur_session.end()
+                self._state = _WorkerState.CREATED
+                self._handle_created(ev)
         if ev & select.EPOLLOUT:
             # I can write to the client, try to send the buffer I have
             self.queue_send()
@@ -127,10 +144,7 @@ class _WorkerSocket(EventConsumer):
                         break
                     self._client_recv_buf += r
             except socket.error as e:
-                if e.errno == errno.ENOTCONN:
-                    # Only happens when this is a client socket which failed to connect.
-                    self._client_socket.close()
-                elif e.errno != errno.EAGAIN:
+                if e.errno != errno.EAGAIN:
                     raise e
 
         if ev & select.EPOLLOUT:
