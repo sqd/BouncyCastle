@@ -10,14 +10,29 @@ from typing import List, Tuple, Iterable, Dict
 from event_server import EventConsumer, EventServer
 from config import HTTPProxyServerConfig
 from http_parser import HTTPParser, HTTPParseState
+from bfc import BFCNode, BFCSession, BFCSessionListener
 from utils import Ref
 
 
-class _WorkerSession:
+class _WorkerSession(BFCSessionListener):
     """
     Handles a worker session to get things sent through a BFC node. Since a connection can have multiple HTTP requests passing through.
     """
-    def __init__(self, bfc: BFCServer):
+    def __init__(self, location: Tuple[str, int], worker: _WorkerSocket, bfc: BFCNode):
+        self._location = location
+        self._worker = worker
+        self._bfc = bfc
+        self._bfc_session: BFCSession = None
+
+    def send(self, s: str):
+        """Send a message out through the BFC."""
+        self._bfc_session.queue_send(s)
+
+    def start(self):
+        self._bfc_session = self._bfc.new_session(self)
+        self._bfc_session.start()
+
+    def recv_callback(self, s: bytes):
         pass
 
 
@@ -26,7 +41,7 @@ class _WorkerState(Enum):
     RELAYING = 2
 
 
-class _WorkerSocket(EventConsumer):
+class _Worker(EventConsumer):
     """Handles a worker connection."""
     def __init__(self, client_socket, bfc: BFCNode, server: EventServer):
         self._client_socket = client_socket
@@ -99,14 +114,15 @@ class _WorkerSocket(EventConsumer):
             header = parse_result
             if header.method != "CONNECT":
                 # if we are not doing HTTP CONNECT, then the header consumed is also a part of the request. (after conversion to non-proxy header)
-                new_header = _WorkerSocket._transform_proxy_header(header)
+                new_header = _Worker._transform_proxy_header(header)
                 self._client_recv_buf = new_header.reconstruct() + self._client_recv_buf
 
             # This is the best we can do. Because HTTPS should use CONNECT anyway.
             port = header.location.port if header.location.port else 80
-            self._cur_session = _WorkerSession((header.location.host, port), self, self._bfc)
             self._state = _WorkerState.RELAYING
             self._http_body_parser = HTTPBodyParser(header)
+            self._cur_session = _WorkerSession((header.location.host, port), self, self._bfc)
+            self._cur_session.start()
             self._handle_relaying(ev)
 
     def _handle_relaying(self, ev: int):
@@ -156,7 +172,7 @@ class _WorkerSocket(EventConsumer):
             self._handle_relaying(ev)
 
 
-class _ListenSocket(EventConsumer):
+class _Listener(EventConsumer):
     def __init__(self, ingress: Tuple[str, int], server: EventServer):
         self._listen_socket = None
         self._ingress = ingress
@@ -167,7 +183,7 @@ class _ListenSocket(EventConsumer):
         client_socket, addr = self._listen_socket.accept()
 
         client_socket.setblocking(0)
-        worker = _WorkerSocket(client_socket, self._server)
+        worker = _Worker(client_socket, self._server)
         worker.start()
         self._server.register(worker)
 
@@ -189,6 +205,6 @@ class HTTPProxyServer(EventServer):
 
     def start(self):
         for addr in self._config.listen_addr:
-            listen_socket = _ListenSocket(addr, self)
+            listen_socket = _Listener(addr, self)
             listen_socket.start()
             self.register(listen_socket)
