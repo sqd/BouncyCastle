@@ -27,7 +27,7 @@ class HTTPBodyParser:
     def __init__(self, encoding: HTTPRequestHeader):
         raise NotImplementedError()
 
-    def feed(self, s: str)->int:
+    def feed(self, s: bytes)->int:
         """
         Feed a string to the parser.
         :return HTTPParseState.PARTIAL if more are expected; HTTPParseState.ERROR if an error occured; an integer n if only n characters are consumed, and the rest belongs to the next request.
@@ -55,9 +55,9 @@ class HTTPRequestHeader:
         self.version: str = None
         """This version string contains the whole HTTP/x.y part."""
         self.headers: List[Tuple[str, str]] = []
-        self.consumed: str = b""
+        self.consumed: bytes = b""
 
-    def reconstruct(self)->str:
+    def reconstruct(self)->bytes:
         """
         Reconstructing the header in string.
         """

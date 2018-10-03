@@ -24,7 +24,7 @@ class _WorkerSession(BFCSessionListener):
         self._bfc = bfc
         self._bfc_session: BFCSession = None
 
-    def send(self, s: str):
+    def send(self, s: bytes):
         """Send a message out through the BFC."""
         self._bfc_session.queue_send(s)
 
@@ -33,7 +33,7 @@ class _WorkerSession(BFCSessionListener):
         self._bfc_session.start()
 
     def recv_callback(self, s: bytes):
-        pass
+        self._worker.queue_send(s)
 
 
 class _WorkerState(Enum):
@@ -43,7 +43,7 @@ class _WorkerState(Enum):
 
 class _Worker(EventConsumer):
     """Handles a worker connection."""
-    def __init__(self, client_socket, bfc: BFCNode, server: EventServer):
+    def __init__(self, client_socket, bfc: BFCNode, ev_server: EventServer):
         self._client_socket = client_socket
         self._client_recv_buf = b""
         """Data RECEIVED from the client."""
@@ -52,7 +52,7 @@ class _Worker(EventConsumer):
         self._client_writable: bool = False
         """If the client is ready to accept data."""
         self._state = _WorkerState.CREATED
-        self._server = server
+        self._ev_server = ev_server
         self._http_header_parser: HTTPHeaderParser = None
         self._http_body_parser: HTTPBodyParser = None
         self._cur_session: _WorkerSession = None
@@ -73,11 +73,11 @@ class _Worker(EventConsumer):
 
     def terminate(self):
         """Abort and do the cleanups."""
-        self._server.unregister(self)
+        self._ev_server.unregister(self)
         self._client_socket.close()
         raise NotImplementedError()
 
-    def queue_send(self, s=b"")->int:
+    def queue_send(self, s: bytes=b"")->int:
         """
         Try to send data to the client. Returns the number of bytes sent. All data will be queued for sending later nonetheless.
         return: Number of bytes sent.
@@ -173,19 +173,19 @@ class _Worker(EventConsumer):
 
 
 class _Listener(EventConsumer):
-    def __init__(self, ingress: Tuple[str, int], server: EventServer):
+    def __init__(self, ingress: Tuple[str, int], ev_server: EventServer):
         self._listen_socket = None
         self._ingress = ingress
-        self._server = server
+        self._ev_server = ev_server
 
     def handle_event(self, fileno, ev):
         # Only EPOLLIN is possible
         client_socket, addr = self._listen_socket.accept()
 
         client_socket.setblocking(0)
-        worker = _Worker(client_socket, self._server)
+        worker = _Worker(client_socket, self._ev_server)
         worker.start()
-        self._server.register(worker)
+        self._ev_server.register(worker)
 
     def start(self):
         self._listen_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -198,13 +198,14 @@ class _Listener(EventConsumer):
         yield self._listen_socket.fileno(), select.EPOLLIN
 
 
-class HTTPProxyServer(EventServer):
-    def __init__(self, config: HTTPProxyServerConfig):
+class HTTPProxyServer:
+    def __init__(self, config: HTTPProxyServerConfig, ev_server: EventServer):
         super().__init__()
         self._config = config
+        self._ev_server = ev_server
 
     def start(self):
         for addr in self._config.listen_addr:
             listen_socket = _Listener(addr, self)
             listen_socket.start()
-            self.register(listen_socket)
+            self._ev_server.register(listen_socket)

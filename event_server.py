@@ -46,7 +46,9 @@ class EventServer:
                 try:
                     self._event_consumers[fileno].handle_event(fileno, event)
                 except Exception as e:
-                    pass
+                    if __debug__:
+                        raise e
+                    pass # TODO: logging
 
     def register(self, event_consumer):
         for fileno, events in event_consumer.events():
