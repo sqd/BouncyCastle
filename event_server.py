@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import select
 from typing import Iterable, Tuple, Dict
 
 
@@ -48,9 +47,12 @@ class EventServer:
                 except Exception as e:
                     if __debug__:
                         raise e
-                    pass # TODO: logging
+                    pass  # TODO: logging
 
     def register(self, event_consumer):
         for fileno, events in event_consumer.events():
             self._event_consumers[fileno] = event_consumer
             self._epoll.register(fileno, events)
+
+    def unregister(self, event_consumer):
+        raise NotImplementedError()

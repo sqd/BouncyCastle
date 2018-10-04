@@ -5,35 +5,13 @@ import errno
 import select
 
 from enum import Enum
-from typing import List, Tuple, Iterable, Dict
+from typing import Tuple
 
 from event_server import EventConsumer, EventServer
 from config import HTTPProxyServerConfig
-from http_parser import HTTPParser, HTTPParseState
+from http_parser import HTTPHeaderParser, HTTPParseState, HTTPBodyParser, HTTPRequestHeader
 from bfc import BFCNode, BFCSession, BFCSessionListener
 from utils import Ref
-
-
-class _WorkerSession(BFCSessionListener):
-    """
-    Handles a worker session to get things sent through a BFC node. Since a connection can have multiple HTTP requests passing through.
-    """
-    def __init__(self, location: Tuple[str, int], worker: _WorkerSocket, bfc: BFCNode):
-        self._location = location
-        self._worker = worker
-        self._bfc = bfc
-        self._bfc_session: BFCSession = None
-
-    def send(self, s: bytes):
-        """Send a message out through the BFC."""
-        self._bfc_session.queue_send(s)
-
-    def start(self):
-        self._bfc_session = self._bfc.new_session(self)
-        self._bfc_session.start()
-
-    def recv_callback(self, s: bytes):
-        self._worker.queue_send(s)
 
 
 class _WorkerState(Enum):
@@ -62,14 +40,7 @@ class _Worker(EventConsumer):
         pass
 
     def events(self):
-        yield self._client_socket.fileno(), select.EPOLLIN|select.EPOLLOUT|select.EPOLLET
-
-    @classmethod
-    def _transform_proxy_header(header: HTTPRequestHeader)->HTTPRequestHeader:
-        """
-        Transform an proxy HTTPRequestHeader to none-proxy HTTPRequestHeader.
-        """
-        raise NotImplementedError()
+        yield self._client_socket.fileno(), select.EPOLLIN | select.EPOLLOUT | select.EPOLLET
 
     def terminate(self):
         """Abort and do the cleanups."""
@@ -79,7 +50,8 @@ class _Worker(EventConsumer):
 
     def queue_send(self, s: bytes=b"")->int:
         """
-        Try to send data to the client. Returns the number of bytes sent. All data will be queued for sending later nonetheless.
+        Try to send data to the client. Returns the number of bytes sent. All data will be queued for sending later
+        nonetheless.
         return: Number of bytes sent.
         """
         total_byte_sent = 0
@@ -113,15 +85,16 @@ class _Worker(EventConsumer):
         elif isinstance(parse_result, HTTPRequestHeader):
             header = parse_result
             if header.method != "CONNECT":
-                # if we are not doing HTTP CONNECT, then the header consumed is also a part of the request. (after conversion to non-proxy header)
-                new_header = _Worker._transform_proxy_header(header)
+                # if we are not doing HTTP CONNECT, then the header consumed is also a part of the request. (after
+                # conversion to non-proxy header)
+                new_header = header.unproxify()
                 self._client_recv_buf = new_header.reconstruct() + self._client_recv_buf
 
             # This is the best we can do. Because HTTPS should use CONNECT anyway.
             port = header.location.port if header.location.port else 80
             self._state = _WorkerState.RELAYING
             self._http_body_parser = HTTPBodyParser(header)
-            self._cur_session = _WorkerSession((header.location.host, port), self, self._bfc)
+            self._cur_session = _WorkerSession((header.location.domain, port), self, self._bfc)
             self._cur_session.start()
             self._handle_relaying(ev)
 
@@ -131,7 +104,7 @@ class _Worker(EventConsumer):
             # I got some data from the client, I want to send it to the BFC.
             # but first, I need to determine if all the data belong to the current session.
             parse_result = self._http_body_parser.feed(self._client_recv_buf)
-            if parse_result = HTTPParseState.PARTIAL:
+            if parse_result == HTTPParseState.PARTIAL:
                 self._cur_session.send(self._client_recv_buf)
                 self._client_recv_buf = b""
             elif parse_result == HTTPParseState.ERROR:
@@ -173,9 +146,10 @@ class _Worker(EventConsumer):
 
 
 class _Listener(EventConsumer):
-    def __init__(self, ingress: Tuple[str, int], ev_server: EventServer):
+    def __init__(self, ingress: Tuple[str, int], bfc: BFCNode, ev_server: EventServer):
         self._listen_socket = None
         self._ingress = ingress
+        self._bfc = bfc
         self._ev_server = ev_server
 
     def handle_event(self, fileno, ev):
@@ -183,7 +157,7 @@ class _Listener(EventConsumer):
         client_socket, addr = self._listen_socket.accept()
 
         client_socket.setblocking(0)
-        worker = _Worker(client_socket, self._ev_server)
+        worker = _Worker(client_socket, self._bfc, self._ev_server)
         worker.start()
         self._ev_server.register(worker)
 
@@ -192,20 +166,50 @@ class _Listener(EventConsumer):
         self._listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self._listen_socket.bind(self._ingress)
         self._listen_socket.listen(5)
-        self._listen_socket.setblocking(0)
+        self._listen_socket.setblocking(False)
 
     def events(self):
         yield self._listen_socket.fileno(), select.EPOLLIN
 
 
 class HTTPProxyServer:
-    def __init__(self, config: HTTPProxyServerConfig, ev_server: EventServer):
+    def __init__(self, config: HTTPProxyServerConfig, bfc: BFCNode, ev_server: EventServer):
         super().__init__()
         self._config = config
+        self._bfc = bfc
         self._ev_server = ev_server
 
     def start(self):
         for addr in self._config.listen_addr:
-            listen_socket = _Listener(addr, self)
+            listen_socket = _Listener(addr, self._bfc, self._ev_server)
             listen_socket.start()
             self._ev_server.register(listen_socket)
+
+
+class _WorkerSession(BFCSessionListener):
+    """
+    Handles a worker session to get things sent through a BFC node. Since a connection can have multiple HTTP
+    requests passing through.
+    """
+    def __init__(self, location: Tuple[str, int], worker: _Worker, bfc: BFCNode):
+        self._location = location
+        self._worker = worker
+        self._bfc = bfc
+        self._bfc_session: BFCSession = None
+
+    def send(self, s: bytes):
+        """Send a message out through the BFC."""
+        self._bfc_session.queue_send(s)
+
+    def start(self):
+        self._bfc_session = self._bfc.new_session(self)
+        self._bfc_session.start()
+
+    def recv_callback(self, s: bytes):
+        self._worker.queue_send(s)
+
+    def end(self):
+        """
+        End this session.
+        """
+        raise NotImplementedError()
