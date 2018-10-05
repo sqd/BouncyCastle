@@ -44,3 +44,6 @@ class BFCSession(EventConsumer):
     def end(self):
         """End this session."""
         raise NotImplementedError
+
+class _Listener(EventConsumer):
+    pass
