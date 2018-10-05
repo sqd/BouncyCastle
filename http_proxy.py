@@ -37,6 +37,7 @@ class _Worker(EventConsumer):
         self._bfc = bfc
 
     def start(self):
+        # Nothing to do here
         pass
 
     def events(self):
@@ -45,8 +46,8 @@ class _Worker(EventConsumer):
     def terminate(self):
         """Abort and do the cleanups."""
         self._ev_server.unregister(self)
+        self._cur_session.end()
         self._client_socket.close()
-        raise NotImplementedError()
 
     def queue_send(self, s: bytes=b"")->int:
         """
@@ -212,4 +213,5 @@ class _WorkerSession(BFCSessionListener):
         """
         End this session.
         """
-        raise NotImplementedError()
+        self._bfc_session.end()
+

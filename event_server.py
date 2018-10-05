@@ -49,10 +49,15 @@ class EventServer:
                         raise e
                     pass  # TODO: logging
 
-    def register(self, event_consumer):
+    def register(self, event_consumer: EventConsumer):
         for fileno, events in event_consumer.events():
             self._event_consumers[fileno] = event_consumer
             self._epoll.register(fileno, events)
 
-    def unregister(self, event_consumer):
-        raise NotImplementedError()
+    def unregister(self, event_consumer: EventConsumer):
+        for fileno, _ in event_consumer.events():
+            try:
+                del(self._event_consumers[fileno])
+                self._epoll.unregister(fileno)
+            except (KeyError, FileNotFoundError) as _:
+                pass

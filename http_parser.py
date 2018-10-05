@@ -62,7 +62,7 @@ class HTTPBodyParser:
         Feed a string to the parser. :return HTTPParseState.PARTIAL if more are expected; HTTPParseState.ERROR if an
         error occured; an integer n if only n characters are consumed, and the rest belongs to the next request.
         """
-        pass
+        raise NotImplementedError()
 
 
 class HTTPHeaderParser:
@@ -77,4 +77,4 @@ class HTTPHeaderParser:
         :param s: Reference of a string to be fed into the parser.
         :return: State of the parsing afterward, or the result.
         """
-        pass
+        raise NotImplementedError()
