@@ -35,7 +35,7 @@ class HTTPRequestHeader:
         self.headers: List[Tuple[str, str]] = []
         self.consumed: bytes = b""
 
-    def unproxify(self)->HTTPRequestHeader:
+    def unproxify(self)->"HTTPRequestHeader":
         """
         Transform this proxy HTTPRequestHeader to none-proxy HTTPRequestHeader.
         """
@@ -281,5 +281,5 @@ class HTTPHeaderParser:
         else:
             return HTTPParseStatus.ERROR
 
-    def self._endrn(self, c:str):
+    def _endrn(self, c:str):
         return HTTPParseStatus.ERROR

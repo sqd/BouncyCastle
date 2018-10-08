@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from typing import Generic
+from typing import Generic, TypeVar
 
+T = TypeVar('T')
 
 class Ref(Generic[T]):
     """
