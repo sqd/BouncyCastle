@@ -9,7 +9,7 @@ from typing import Tuple
 
 from event_server import EventConsumer, EventServer
 from config import HTTPProxyServerConfig
-from http_parser import HTTPHeaderParser, HTTPParseState, HTTPBodyParser, HTTPRequestHeader
+from http_parser import HTTPHeaderParser, HTTPParseStatus, HTTPBodyParser, HTTPRequestHeader
 from bfc import BFCNode, BFCSession, BFCSessionListener
 from utils import Ref
 
@@ -181,7 +181,7 @@ class HTTPProxyServer:
         self._ev_server = ev_server
 
     def start(self):
-        for addr in self._config.listen_addr:
+        for addr in self._config.listen_address:
             listen_socket = _Listener(addr, self._bfc, self._ev_server)
             listen_socket.start()
             self._ev_server.register(listen_socket)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from typing import Iterable, Tuple, Dict
+import select
 
 
 class EventConsumer:
@@ -33,7 +34,7 @@ class EventServer:
     def __init__(self):
         self._event_consumers: Dict[int, EventConsumer] = {}
         """Consumers that subscribe for epoll events. Indexed by their file descriptors."""
-        self._epoll = None
+        self._epoll = select.epoll()
 
     def start(self):
         """
