@@ -31,21 +31,35 @@ class HTTPRequestHeader:
         self.location: HTTPLocation = None
         self.version: str = None
         """This version string contains the whole HTTP/x.y part."""
-        self.headers: List[Tuple[str, str]] = []
+        self.headers: Dict[str, Tuple[int, str]] = []
+        """Key: (Order, Value)"""
         self.consumed: bytes = b""
         self.uri: bytes = b""
 
-    def unproxify(self)->"HTTPRequestHeader":
+    def unproxify(self):
         """
         Transform this proxy HTTPRequestHeader to none-proxy HTTPRequestHeader.
         """
-        raise NotImplementedError()
+        order_host = self.headers[b"Host"][0] if b"Host" in self.headers else len(self.headers)
+        self.headers[b"Host"] = (order_host, self.location.netloc.encode("ascii"))
+        self.uri = urlparse.urlunsplit(["", "", self.location.path, self.location.query, self.location.fragment]).encode("ascii")
+        # TODO: maybe handle Connection
 
     def reconstruct(self)->bytes:
         """
         Reconstructing the header in string.
         """
-        raise NotImplementedError()
+        result = b""
+        result += b"%s %s %s\r\n" % (self.method, self.uri, self.version)
+
+        # Reorder the headers
+        headers = [None] * len(self.headers)
+        for (k, (i, v)) in self.headers.items():
+            headers[i] = (k, v)
+        for (k, v) in headers:
+            result += b"%s: %s\r\n" % (k, v)
+        result += b"\r\n"
+        return result
 
 
 class HTTPParseStatus(Enum):
@@ -95,14 +109,19 @@ class HTTPHeaderParser:
         """
         Post process self._parse_result:
         1. Parse location
-        2. change headers to tuples
+        2. change headers to dict
         """
         try:
             self._parse_result.location = urlparse.urlparse(self._parse_result.uri.decode("ascii"))
         except (ValueError, UnicodeDecodeError) as e:
             self._parse_result = HTTPParseStatus.ERROR
             return
-        self._parse_result.headers = [(k, v) for [k, v] in self._parse_result.headers]
+        header_dict = {}
+        i = 0
+        for (k, v) in self._parse_result.headers:
+            header_dict[k] = (i, v)
+            i += 1
+        self._parse_result.headers = header_dict
 
     def feed(self, ref_s: Ref[bytes])->Union[HTTPParseStatus, HTTPRequestHeader]:
         """
