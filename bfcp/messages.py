@@ -33,7 +33,6 @@ class TrafficManager:
     def __init__(self, trust_table_manager: TrustTableManager,
                  on_new_message: Callable[[BouncyMessage, RsaKey, 'TrafficManager'], None],
                  max_clients=60, max_servers=60):
-        self._on_new_message = on_new_message
         self._max_clients = max_clients
         self._max_servers = max_servers
         self._trust_table_manager = trust_table_manager
