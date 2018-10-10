@@ -1,5 +1,8 @@
 import threading
 from typing import Callable, List
+import protos.bfcp_pb2 as bfcp_pb2
+from random import randint
+from uuid import uuid4
 
 import utils
 
@@ -16,18 +19,39 @@ class Connection:
         self._on_new_data: List[Callable[[bytes], None]] = []
         self._on_closed: List[Callable[[Exception], None]] = []
 
-    async def initiate_connection(self):
+    async def initiate_connection(self, _en_requirement: bfcp_pb2.EndNodeRequirement, _ts_address: str, _ts_port = 80: int):
         """
         This function can only be called once. This will initiate the connection and return once the
         connection is stable and ready to transfer information.
+        Args:
+            en_requirement: EndNodeRequirement from client configurations
+            _ts_address: string address clients want to connect to
+            _ts_port: int port number client wants to connect to
         """
-        raise NotImplementedError()
+        connection_params = bfcp_pb2.ConnectionRoutingParams()
+        connection_params.UUID = str(uuid4())
+        connection_params.remaining_hops = float(randint(10,20))
+
+        end_node_requirement = _en_requirement
+        target_server_address = _ts_address
+        target_server_port = _ts_port
+
+        sender_connection_signing_key = self.generate_public_key()
+
+        connection_request = bfcp_pb2.ConnectionRequest()
+        connection_request.connection_params = connection_params
+        connection_request.end_node_requirement = end_node_requirement
+        connection_request.target_server_address = target_server_address
+        connection_request.target_server_port = target_server_port
+        connection_request.sender_connection_signing_key = sender_connection_signing_key
+
+        # TODO: wait until connection is established
+
 
     def send(self, data: bytes):
         """
         Sends the specified data to the target server. This is a non-blocking call.
         """
-        raise NotImplementedError()
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
         """
@@ -76,6 +100,19 @@ class Connection:
             connection.unregister_on_closed(callback)
         """
         self._on_closed.remove(callback)
+
+def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, message_manager: MessageManager):
+    """
+    Receives a connections request and decides where should the connections request be sent
+    """
+    remaining_hops = conn_request.connection_params.conn_request
+    conn_request.connection_params.conn_request -= 1
+    if remaining_hops == 1:
+        # send to bouncy node that is well-suited to become EN 
+        # if we want to access contents from China, EN should be in China
+    else:
+        # bounce to any random bouncy node
+
 
 
 class SocketConnection:
