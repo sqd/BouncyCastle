@@ -5,15 +5,26 @@ from uuid import uuid4
 
 class Conn(object):
 
-    def make_request(self, _end_node_requirement):
+    def make_request(self, _en_requirement, _ts_address, _ts_port = 80, ):
         # make request object and send it
         connection_params = bfcp.ConnectionRoutingParams()
         connection_params.UUID = str(uuid4())
         connection_params.remaining_hops = float(randint(10,20))
 
-        end_node_requirement = _end_node_requirement
+        end_node_requirement = _en_requirement
+        target_server_address = _ts_address
+        target_server_port = _ts_port
 
+        sender_connection_signing_key = self.generate_public_key()
 
+        connection_request = bfcp.ConnectionRequest()
+        connection_request.connection_params = connection_params
+        connection_request.end_node_requirement = end_node_requirement
+        connection_request.target_server_address = target_server_address
+        connection_request.target_server_port = target_server_port
+        connection_request.sender_connection_signing_key = sender_connection_signing_key
+
+        
 
 
 
@@ -21,6 +32,9 @@ class Conn(object):
         pass
     
     def send_response(self):
+        pass
+    
+    def generate_public_key(self):
         pass
 
 message ConnectionRequest {
