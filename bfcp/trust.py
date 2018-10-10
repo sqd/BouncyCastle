@@ -1,15 +1,20 @@
 """
 TODO(han): just a stub.
 """
-from protos.bfcp_pb2 import NodeTable
+from Crypto.PublicKey.RSA import RsaKey
+
+from protos.bfcp_pb2 import NodeTable, NodeTableEntry
 
 
-def TrustTableManager:
-    def get_node_table() -> NodeTable:
+class TrustTableManager:
+    def get_node_table(self) -> NodeTable:
         """
         Gets the node table of this node in the bfcp
         """
         raise NotImplementedError()
 
-    async def update_table():
+    async def update_table(self):
+        raise NotImplementedError()
+
+    def get_node_by_pubkey(self, pubkey: RsaKey) -> NodeTableEntry:
         raise NotImplementedError()
