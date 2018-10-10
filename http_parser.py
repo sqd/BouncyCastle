@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from enum import Enum, auto
-from typing import List, Tuple, Union
+from typing import Dict, Tuple, Union
 from string import ascii_letters, digits, punctuation
 import urllib.parse as urlparse
 
@@ -27,11 +27,11 @@ class HTTPRequestHeader:
     Parsing result of an HTTPHeaderParser.
     """
     def __init__(self):
-        self.method: str = None
+        self.method: bytes = None
         self.location: HTTPLocation = None
-        self.version: str = None
+        self.version: bytes = None
         """This version string contains the whole HTTP/x.y part."""
-        self.headers: Dict[str, Tuple[int, str]] = []
+        self.headers: Dict[bytes, Tuple[int, bytes]] = []
         """Key: (Order, Value)"""
         self.consumed: bytes = b""
         self.uri: bytes = b""
@@ -70,14 +70,30 @@ class HTTPParseStatus(Enum):
 
 
 class HTTPBodyEncoding(Enum):
+    NONE = auto()
     CONTENT_LENGTH = auto()
     CHUNKED = auto()
 
 
 class HTTPBodyParser:
     def __init__(self, header: HTTPRequestHeader):
-        self._buf = b""
-        raise NotImplementedError()
+        try:
+            if b"Content-Length" in header.headers:
+                self._encoding = HTTPBodyEncoding.CONTENT_LENGTH
+                self._content_length = int(header.headers[b"Content-Length"][1])
+            elif header.version == b"HTTP/1.1" and header.headers.get(b"Content-Encoding") == b"chunked":
+                self._encoding = HTTPBodyEncoding.CHUNKED
+                self._len_buffer = b""
+                # When chunk length is 0, this means we have just finished reading a chunk/fresh start.
+                # When chunk length is -1, this means we have started reading length, and are still waiting for length.
+                # When chunk length is -2, this means we have gotten \r for ending length, and are waiting for \n.
+                # When chunk length is -3, this means we have gotten \r for ending body, and are waiting for \n.
+                # Otherwise, it's the remaining length of this chunk.
+                self._chunk_length = 0
+            else:
+                self._encoding: HTTPBodyEncoding = HTTPBodyEncoding.NONE
+        except:
+            self._encoding: HTTPBodyEncoding = HTTPBodyEncoding.NONE
 
     def feed(self, s: bytes)->Union[HTTPParseStatus, int]:
         """
@@ -85,7 +101,53 @@ class HTTPBodyParser:
         :return HTTPParseStatus.PARTIAL if more are expected; HTTPParseStatus.ERROR if an error occured; an integer n if only n characters are consumed, and the rest belongs to the next request.
         :raises RuntimeError when called after a result has been returned.
         """
-        raise NotImplementedError()
+        if self._encoding == HTTPBodyEncoding.NONE:
+            return HTTPParseStatus.PARTIAL
+        elif self._encoding == HTTPBodyEncoding.CONTENT_LENGTH:
+            if len(s) > self._content_length:
+                return self._content_length
+            else:
+                self._content_length -= len(s)
+                return HTTPParseStatus.PARTIAL
+        elif self._encoding == HTTPBodyEncoding.CHUNKED:
+            for i in range(len(s)):
+                c = s[i]
+                # Fresh start/just finished a chunk
+                if self._chunk_length == 0:
+                    # Ending body
+                    if c == b'\r':
+                        self._chunk_length = -3
+                    # Treat as length
+                    else:
+                        self._len_buffer += c
+                        self._chunk_length = -1
+                # In length
+                elif self._chunk_length == -1:
+                    # Ending length
+                    if c == b'\r':
+                        self._chunk_length = -2
+                    else:
+                        self._len_buffer += c
+                # Waiting for \n for ending length
+                elif self._chunk_length == -2:
+                    if c != b'\n':
+                        return HTTPParseStatus.ERROR
+                    try:
+                        self._chunk_length = int(self._len_buffer) + 2  # 2 more \r\n
+                    except ValueError:
+                        return HTTPParseStatus.ERROR
+                # Waiting for \n for ending body
+                elif self._chunk_length == -3:
+                    if c != b'\n':
+                        return HTTPParseStatus.ERROR
+                    else:
+                        return i + 1
+                # Waiting for body
+                else:
+                    self._chunk_length -= 1
+
+            return HTTPParseStatus.PARTIAL
+
 
 
 class HTTPParseFailedError(Exception):
