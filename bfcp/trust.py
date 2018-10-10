@@ -17,4 +17,5 @@ class TrustTableManager:
         raise NotImplementedError()
 
     def get_node_by_pubkey(self, pubkey: RsaKey) -> NodeTableEntry:
+        """Returns None if not found"""
         raise NotImplementedError()
