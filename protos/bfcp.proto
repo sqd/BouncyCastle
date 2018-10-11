@@ -96,10 +96,9 @@ message ConnectionRoutingParams {
    // Expected to be in the UUID format.
    string UUID = 1;
 
-   // TODO: consider using int32 for remaining_hops
    // A number indicating how close we are to calling the current node the End Node. When remaining
    // hops reaches 0 or less, the given node becomes an end node.
-   float remaining_hops = 2;
+   int32 remaining_hops = 2;
 }
 
 message ConnectionRequest {
