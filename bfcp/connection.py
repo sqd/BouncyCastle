@@ -3,6 +3,7 @@ from typing import Callable, List
 import protos.bfcp_pb2 as bfcp_pb2
 from random import randint
 from uuid import uuid4
+from bfcp.messages import TrafficManager
 
 import utils
 
@@ -24,7 +25,7 @@ class Connection:
         """
         This function can only be called once.
         Args:
-            en_requirement: EndNodeRequirement from client configurations
+            _en_requirement: EndNodeRequirement from client configurations
             _ts_address: string address clients want to connect to
             _ts_port: int port number client wants to connect to
         """
@@ -124,18 +125,24 @@ class Connection:
         """
         self._on_closed.remove(callback)
 
-def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, message_manager: MessageManager):
+
+def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_manager: TrafficManager):
     """
-    Receives a connections request and decides where should the connections request be sent
+    Static function that eceives a connections request and 
+    decides where should the connections request be sent
     """
     remaining_hops = conn_request.connection_params.conn_request
     conn_request.connection_params.conn_request -= 1
-    if remaining_hops == 1:
-        # send to bouncy node that is well-suited to become EN 
-        # if we want to access contents from China, EN should be in China
+    if remaining_hops >= 0:
+        if remaining_hops == 1:
+            # send to bouncy node that is well-suited to become EN 
+            # if we want to access contents from China, EN should be in China
+        else:
+            # bounce to any random bouncy node
     else:
-        # bounce to any random bouncy node
-
+        # remaining_hops is negative, meaning that we were not able to
+        # find a connection with desired requirements
+        # thus, drop the connection
 
 
 class SocketConnection:
