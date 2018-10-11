@@ -21,23 +21,23 @@ class Connection:
         self._on_closed: List[Callable[[Exception], None]] = []
         self._on_established: List[Callable[[Exception], None]] = []
 
-    def initiate_connection(self, _en_requirement: bfcp_pb2.EndNodeRequirement, _ts_address: str, _ts_port = 80: int):
+    async def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: str, ts_port: int = 80):
         """
         This function can only be called once.
         Args:
-            _en_requirement: EndNodeRequirement from client configurations
-            _ts_address: string address clients want to connect to
-            _ts_port: int port number client wants to connect to
+            en_requirement: EndNodeRequirement from client configurations
+            ts_address: string address clients want to connect to
+            ts_port: int port number client wants to connect to
         """
         connection_params = bfcp_pb2.ConnectionRoutingParams()
         connection_params.UUID = str(uuid4())
         connection_params.remaining_hops = float(randint(10,20))
 
-        end_node_requirement = _en_requirement
-        target_server_address = _ts_address
-        target_server_port = _ts_port
+        self._end_node_requirement = en_requirement
+        self._target_server_address = ts_address
+        self._target_server_port = ts_port
 
-        sender_connection_signing_key = self.generate_public_key()
+        self.sender_connection_signing_key = self.generate_public_key()
 
         connection_request = bfcp_pb2.ConnectionRequest()
         connection_request.connection_params = connection_params
@@ -128,8 +128,8 @@ class Connection:
 
 def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_manager: TrafficManager):
     """
-    Static function that eceives a connections request and 
-    decides where should the connections request be sent
+    Static function that receives a connections request and 
+    decides where should the connection request be sent
     """
     remaining_hops = conn_request.connection_params.conn_request
     conn_request.connection_params.conn_request -= 1
