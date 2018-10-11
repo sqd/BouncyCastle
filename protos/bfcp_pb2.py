@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='bfcp',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\nbfcp.proto\x12\x04\x62\x66\x63p\"\xfe\x04\n\rBouncyMessage\x12\x33\n\x11\x64iscovery_request\x18\x01 \x01(\x0b\x32\x16.bfcp.DiscoveryRequestH\x00\x12%\n\nnode_table\x18\x02 \x01(\x0b\x32\x0f.bfcp.NodeTableH\x00\x12\x35\n\x12\x63onnection_request\x18\x03 \x01(\x0b\x32\x17.bfcp.ConnectionRequestH\x00\x12\x37\n\x13\x63onnection_response\x18\x04 \x01(\x0b\x32\x18.bfcp.ConnectionResponseH\x00\x12/\n\x0f\x63hannel_request\x18\x05 \x01(\x0b\x32\x14.bfcp.ChannelRequestH\x00\x12\x31\n\x10\x63hannel_response\x18\x06 \x01(\x0b\x32\x15.bfcp.ChannelResponseH\x00\x12\x46\n\x1b\x62roken_channel_notification\x18\x07 \x01(\x0b\x32\x1f.bfcp.BrokenChannelNotificationH\x00\x12@\n\x18\x62roken_channel_broadcast\x18\x08 \x01(\x0b\x32\x1c.bfcp.BrokenChannelBroadcastH\x00\x12\x34\n\x12to_original_sender\x18\t \x01(\x0b\x32\x16.bfcp.ToOriginalSenderH\x00\x12\x30\n\x10to_target_server\x18\n \x01(\x0b\x32\x14.bfcp.ToTargetServerH\x00\x12@\n\x18\x63lose_connection_request\x18\x0b \x01(\x0b\x32\x1c.bfcp.CloseConnectionRequestH\x00\x42\t\n\x07message\"!\n\x0cRsaChallenge\x12\x11\n\tencrypted\x18\x01 \x01(\x0c\")\n\x14RsaChallengeResponse\x12\x11\n\tdecrypted\x18\x01 \x01(\x0c\"2\n\tRsaPubKey\x12\x0f\n\x07modulus\x18\x01 \x01(\x0c\x12\x14\n\x0cpub_exponent\x18\x02 \x01(\x0c\"\x12\n\x10\x44iscoveryRequest\"I\n\x04Node\x12\x12\n\npublic_key\x18\x01 \x01(\x0c\x12\x1a\n\x12last_known_address\x18\x02 \x01(\t\x12\x11\n\tlast_port\x18\x03 \x01(\x05\"?\n\x0eNodeTableEntry\x12\x18\n\x04node\x18\x01 \x01(\x0b\x32\n.bfcp.Node\x12\x13\n\x0btrust_score\x18\x02 \x01(\x02\"2\n\tNodeTable\x12%\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x14.bfcp.NodeTableEntry\"?\n\x17\x43onnectionRoutingParams\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12\x16\n\x0eremaining_hops\x18\x02 \x01(\x02\"\xdf\x01\n\x11\x43onnectionRequest\x12\x38\n\x11\x63onnection_params\x18\x01 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x36\n\x14\x65nd_node_requirement\x18\x02 \x01(\x0b\x32\x18.bfcp.EndNodeRequirement\x12\x1d\n\x15target_server_address\x18\x03 \x01(\t\x12\x1a\n\x12target_server_port\x18\x04 \x01(\x05\x12\x1d\n\x15sender_connection_key\x18\x05 \x01(\x0c\"\x93\x01\n\x12\x45ndNodeRequirement\x12\x13\n\tip_subnet\x18\x01 \x01(\x05H\x00\x12\x11\n\x07\x63ountry\x18\x02 \x01(\x05H\x00\x12!\n\x02or\x18\x03 \x01(\x0b\x32\x13.bfcp.OrRequirementH\x00\x12#\n\x03\x61nd\x18\x04 \x01(\x0b\x32\x14.bfcp.AndRequirementH\x00\x42\r\n\x0brequirement\"?\n\rOrRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"@\n\x0e\x41ndRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"S\n\x12\x43onnectionResponse\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12/\n\x11selected_end_node\x18\x02 \x01(\x0b\x32\x14.bfcp.NodeTableEntry\"\xc5\x01\n\x0e\x43hannelRequest\x12%\n\tchallenge\x18\x01 \x01(\x0b\x32\x12.bfcp.RsaChallenge\x12\x1c\n\x08\x65nd_node\x18\x02 \x01(\x0b\x32\n.bfcp.Node\x12\x35\n\x0erouting_params\x18\x03 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x14\n\x0c\x63hannel_UUID\x18\x04 \x01(\t\x12!\n\x19original_sender_signature\x18\x05 \x01(\x0c\"_\n\x0f\x43hannelResponse\x12\x36\n\x12\x63hallenge_response\x18\x01 \x01(\x0b\x32\x1a.bfcp.RsaChallengeResponse\x12\x14\n\x0c\x63hannel_seed\x18\x02 \x01(\x0c\":\n\tChannelID\x12\x17\n\x0f\x63onnection_UUID\x18\x01 \x01(\t\x12\x14\n\x0c\x63hannel_UUID\x18\x02 \x01(\t\"i\n\x0eToTargetServer\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x03 \x01(\x0c\"d\n\x10ToOriginalSender\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"D\n\x19\x42rokenChannelNotification\x12\'\n\x0e\x62roken_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\"\x89\x01\n\x16\x42rokenChannelBroadcast\x12\'\n\x0e\x62roken_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12*\n\x11transport_channel\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"d\n\x16\x43loseConnectionRequest\x12\'\n\x0e\x63losed_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x02 \x01(\x0c\x62\x06proto3')
+  serialized_pb=_b('\n\nbfcp.proto\x12\x04\x62\x66\x63p\"\xf4\x03\n\rBouncyMessage\x12\x33\n\x11\x64iscovery_request\x18\x01 \x01(\x0b\x32\x16.bfcp.DiscoveryRequestH\x00\x12%\n\nnode_table\x18\x02 \x01(\x0b\x32\x0f.bfcp.NodeTableH\x00\x12\x35\n\x12\x63onnection_request\x18\x03 \x01(\x0b\x32\x17.bfcp.ConnectionRequestH\x00\x12\x37\n\x13\x63onnection_response\x18\x04 \x01(\x0b\x32\x18.bfcp.ConnectionResponseH\x00\x12/\n\x0f\x63hannel_request\x18\x05 \x01(\x0b\x32\x14.bfcp.ChannelRequestH\x00\x12\x31\n\x10\x63hannel_response\x18\x06 \x01(\x0b\x32\x15.bfcp.ChannelResponseH\x00\x12\x34\n\x12to_original_sender\x18\t \x01(\x0b\x32\x16.bfcp.ToOriginalSenderH\x00\x12\x30\n\x10to_target_server\x18\n \x01(\x0b\x32\x14.bfcp.ToTargetServerH\x00\x12@\n\x18\x63lose_connection_request\x18\x0b \x01(\x0b\x32\x1c.bfcp.CloseConnectionRequestH\x00\x42\t\n\x07message\"!\n\x0cRsaChallenge\x12\x11\n\tencrypted\x18\x01 \x01(\x0c\")\n\x14RsaChallengeResponse\x12\x11\n\tdecrypted\x18\x01 \x01(\x0c\"2\n\tRsaPubKey\x12\x0f\n\x07modulus\x18\x01 \x01(\x0c\x12\x14\n\x0cpub_exponent\x18\x02 \x01(\x0c\"\x12\n\x10\x44iscoveryRequest\"I\n\x04Node\x12\x12\n\npublic_key\x18\x01 \x01(\x0c\x12\x1a\n\x12last_known_address\x18\x02 \x01(\t\x12\x11\n\tlast_port\x18\x03 \x01(\x05\"?\n\x0eNodeTableEntry\x12\x18\n\x04node\x18\x01 \x01(\x0b\x32\n.bfcp.Node\x12\x13\n\x0btrust_score\x18\x02 \x01(\x02\"2\n\tNodeTable\x12%\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x14.bfcp.NodeTableEntry\"?\n\x17\x43onnectionRoutingParams\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12\x16\n\x0eremaining_hops\x18\x02 \x01(\x02\"\xdf\x01\n\x11\x43onnectionRequest\x12\x38\n\x11\x63onnection_params\x18\x01 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x36\n\x14\x65nd_node_requirement\x18\x02 \x01(\x0b\x32\x18.bfcp.EndNodeRequirement\x12\x1d\n\x15target_server_address\x18\x03 \x01(\t\x12\x1a\n\x12target_server_port\x18\x04 \x01(\x05\x12\x1d\n\x15sender_connection_key\x18\x05 \x01(\x0c\"\x93\x01\n\x12\x45ndNodeRequirement\x12\x13\n\tip_subnet\x18\x01 \x01(\x05H\x00\x12\x11\n\x07\x63ountry\x18\x02 \x01(\x05H\x00\x12!\n\x02or\x18\x03 \x01(\x0b\x32\x13.bfcp.OrRequirementH\x00\x12#\n\x03\x61nd\x18\x04 \x01(\x0b\x32\x14.bfcp.AndRequirementH\x00\x42\r\n\x0brequirement\"?\n\rOrRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"@\n\x0e\x41ndRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"S\n\x12\x43onnectionResponse\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12/\n\x11selected_end_node\x18\x02 \x01(\x0b\x32\x14.bfcp.NodeTableEntry\"\x9e\x01\n\x0e\x43hannelRequest\x12\x1c\n\x08\x65nd_node\x18\x01 \x01(\x0b\x32\n.bfcp.Node\x12\x35\n\x0erouting_params\x18\x02 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x14\n\x0c\x63hannel_UUID\x18\x03 \x01(\t\x12!\n\x19original_sender_signature\x18\x04 \x01(\x0c\"6\n\x0f\x43hannelResponse\x12#\n\nchannel_id\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\":\n\tChannelID\x12\x17\n\x0f\x63onnection_UUID\x18\x01 \x01(\t\x12\x14\n\x0c\x63hannel_UUID\x18\x02 \x01(\t\"i\n\x0eToTargetServer\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x03 \x01(\x0c\"d\n\x10ToOriginalSender\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"d\n\x16\x43loseConnectionRequest\x12\'\n\x0e\x63losed_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x02 \x01(\x0c\"C\n\tPeerHello\x12 \n\x07pub_key\x18\x01 \x01(\x0b\x32\x0f.bfcp.RsaPubKey\x12\x14\n\x0cserving_port\x18\x02 \x01(\x05\x62\x06proto3')
 )
 
 
@@ -75,35 +75,21 @@ _BOUNCYMESSAGE = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='broken_channel_notification', full_name='bfcp.BouncyMessage.broken_channel_notification', index=6,
-      number=7, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='broken_channel_broadcast', full_name='bfcp.BouncyMessage.broken_channel_broadcast', index=7,
-      number=8, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='to_original_sender', full_name='bfcp.BouncyMessage.to_original_sender', index=8,
+      name='to_original_sender', full_name='bfcp.BouncyMessage.to_original_sender', index=6,
       number=9, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='to_target_server', full_name='bfcp.BouncyMessage.to_target_server', index=9,
+      name='to_target_server', full_name='bfcp.BouncyMessage.to_target_server', index=7,
       number=10, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='close_connection_request', full_name='bfcp.BouncyMessage.close_connection_request', index=10,
+      name='close_connection_request', full_name='bfcp.BouncyMessage.close_connection_request', index=8,
       number=11, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
@@ -125,7 +111,7 @@ _BOUNCYMESSAGE = _descriptor.Descriptor(
       index=0, containing_type=None, fields=[]),
   ],
   serialized_start=21,
-  serialized_end=659,
+  serialized_end=521,
 )
 
 
@@ -155,8 +141,8 @@ _RSACHALLENGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=661,
-  serialized_end=694,
+  serialized_start=523,
+  serialized_end=556,
 )
 
 
@@ -186,8 +172,8 @@ _RSACHALLENGERESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=696,
-  serialized_end=737,
+  serialized_start=558,
+  serialized_end=599,
 )
 
 
@@ -224,8 +210,8 @@ _RSAPUBKEY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=739,
-  serialized_end=789,
+  serialized_start=601,
+  serialized_end=651,
 )
 
 
@@ -248,8 +234,8 @@ _DISCOVERYREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=791,
-  serialized_end=809,
+  serialized_start=653,
+  serialized_end=671,
 )
 
 
@@ -293,8 +279,8 @@ _NODE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=811,
-  serialized_end=884,
+  serialized_start=673,
+  serialized_end=746,
 )
 
 
@@ -331,8 +317,8 @@ _NODETABLEENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=886,
-  serialized_end=949,
+  serialized_start=748,
+  serialized_end=811,
 )
 
 
@@ -362,8 +348,8 @@ _NODETABLE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=951,
-  serialized_end=1001,
+  serialized_start=813,
+  serialized_end=863,
 )
 
 
@@ -400,8 +386,8 @@ _CONNECTIONROUTINGPARAMS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1003,
-  serialized_end=1066,
+  serialized_start=865,
+  serialized_end=928,
 )
 
 
@@ -459,8 +445,8 @@ _CONNECTIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1069,
-  serialized_end=1292,
+  serialized_start=931,
+  serialized_end=1154,
 )
 
 
@@ -514,8 +500,8 @@ _ENDNODEREQUIREMENT = _descriptor.Descriptor(
       name='requirement', full_name='bfcp.EndNodeRequirement.requirement',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=1295,
-  serialized_end=1442,
+  serialized_start=1157,
+  serialized_end=1304,
 )
 
 
@@ -545,8 +531,8 @@ _ORREQUIREMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1444,
-  serialized_end=1507,
+  serialized_start=1306,
+  serialized_end=1369,
 )
 
 
@@ -576,8 +562,8 @@ _ANDREQUIREMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1509,
-  serialized_end=1573,
+  serialized_start=1371,
+  serialized_end=1435,
 )
 
 
@@ -614,8 +600,8 @@ _CONNECTIONRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1575,
-  serialized_end=1658,
+  serialized_start=1437,
+  serialized_end=1520,
 )
 
 
@@ -627,36 +613,29 @@ _CHANNELREQUEST = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='challenge', full_name='bfcp.ChannelRequest.challenge', index=0,
+      name='end_node', full_name='bfcp.ChannelRequest.end_node', index=0,
       number=1, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='end_node', full_name='bfcp.ChannelRequest.end_node', index=1,
+      name='routing_params', full_name='bfcp.ChannelRequest.routing_params', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='routing_params', full_name='bfcp.ChannelRequest.routing_params', index=2,
-      number=3, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='channel_UUID', full_name='bfcp.ChannelRequest.channel_UUID', index=3,
-      number=4, type=9, cpp_type=9, label=1,
+      name='channel_UUID', full_name='bfcp.ChannelRequest.channel_UUID', index=2,
+      number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='original_sender_signature', full_name='bfcp.ChannelRequest.original_sender_signature', index=4,
-      number=5, type=12, cpp_type=9, label=1,
+      name='original_sender_signature', full_name='bfcp.ChannelRequest.original_sender_signature', index=3,
+      number=4, type=12, cpp_type=9, label=1,
       has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -673,8 +652,8 @@ _CHANNELREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1661,
-  serialized_end=1858,
+  serialized_start=1523,
+  serialized_end=1681,
 )
 
 
@@ -686,16 +665,9 @@ _CHANNELRESPONSE = _descriptor.Descriptor(
   containing_type=None,
   fields=[
     _descriptor.FieldDescriptor(
-      name='challenge_response', full_name='bfcp.ChannelResponse.challenge_response', index=0,
+      name='channel_id', full_name='bfcp.ChannelResponse.channel_id', index=0,
       number=1, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='channel_seed', full_name='bfcp.ChannelResponse.channel_seed', index=1,
-      number=2, type=12, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b(""),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
@@ -711,8 +683,8 @@ _CHANNELRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1860,
-  serialized_end=1955,
+  serialized_start=1683,
+  serialized_end=1737,
 )
 
 
@@ -749,8 +721,8 @@ _CHANNELID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1957,
-  serialized_end=2015,
+  serialized_start=1739,
+  serialized_end=1797,
 )
 
 
@@ -794,8 +766,8 @@ _TOTARGETSERVER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2017,
-  serialized_end=2122,
+  serialized_start=1799,
+  serialized_end=1904,
 )
 
 
@@ -839,84 +811,8 @@ _TOORIGINALSENDER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2124,
-  serialized_end=2224,
-)
-
-
-_BROKENCHANNELNOTIFICATION = _descriptor.Descriptor(
-  name='BrokenChannelNotification',
-  full_name='bfcp.BrokenChannelNotification',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='broken_channel', full_name='bfcp.BrokenChannelNotification.broken_channel', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=2226,
-  serialized_end=2294,
-)
-
-
-_BROKENCHANNELBROADCAST = _descriptor.Descriptor(
-  name='BrokenChannelBroadcast',
-  full_name='bfcp.BrokenChannelBroadcast',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='broken_channel', full_name='bfcp.BrokenChannelBroadcast.broken_channel', index=0,
-      number=1, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='transport_channel', full_name='bfcp.BrokenChannelBroadcast.transport_channel', index=1,
-      number=2, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='end_node_signature', full_name='bfcp.BrokenChannelBroadcast.end_node_signature', index=2,
-      number=3, type=12, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b(""),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=2297,
-  serialized_end=2434,
+  serialized_start=1906,
+  serialized_end=2006,
 )
 
 
@@ -953,8 +849,46 @@ _CLOSECONNECTIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2436,
-  serialized_end=2536,
+  serialized_start=2008,
+  serialized_end=2108,
+)
+
+
+_PEERHELLO = _descriptor.Descriptor(
+  name='PeerHello',
+  full_name='bfcp.PeerHello',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='pub_key', full_name='bfcp.PeerHello.pub_key', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='serving_port', full_name='bfcp.PeerHello.serving_port', index=1,
+      number=2, type=5, cpp_type=1, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=2110,
+  serialized_end=2177,
 )
 
 _BOUNCYMESSAGE.fields_by_name['discovery_request'].message_type = _DISCOVERYREQUEST
@@ -963,8 +897,6 @@ _BOUNCYMESSAGE.fields_by_name['connection_request'].message_type = _CONNECTIONRE
 _BOUNCYMESSAGE.fields_by_name['connection_response'].message_type = _CONNECTIONRESPONSE
 _BOUNCYMESSAGE.fields_by_name['channel_request'].message_type = _CHANNELREQUEST
 _BOUNCYMESSAGE.fields_by_name['channel_response'].message_type = _CHANNELRESPONSE
-_BOUNCYMESSAGE.fields_by_name['broken_channel_notification'].message_type = _BROKENCHANNELNOTIFICATION
-_BOUNCYMESSAGE.fields_by_name['broken_channel_broadcast'].message_type = _BROKENCHANNELBROADCAST
 _BOUNCYMESSAGE.fields_by_name['to_original_sender'].message_type = _TOORIGINALSENDER
 _BOUNCYMESSAGE.fields_by_name['to_target_server'].message_type = _TOTARGETSERVER
 _BOUNCYMESSAGE.fields_by_name['close_connection_request'].message_type = _CLOSECONNECTIONREQUEST
@@ -986,12 +918,6 @@ _BOUNCYMESSAGE.fields_by_name['channel_request'].containing_oneof = _BOUNCYMESSA
 _BOUNCYMESSAGE.oneofs_by_name['message'].fields.append(
   _BOUNCYMESSAGE.fields_by_name['channel_response'])
 _BOUNCYMESSAGE.fields_by_name['channel_response'].containing_oneof = _BOUNCYMESSAGE.oneofs_by_name['message']
-_BOUNCYMESSAGE.oneofs_by_name['message'].fields.append(
-  _BOUNCYMESSAGE.fields_by_name['broken_channel_notification'])
-_BOUNCYMESSAGE.fields_by_name['broken_channel_notification'].containing_oneof = _BOUNCYMESSAGE.oneofs_by_name['message']
-_BOUNCYMESSAGE.oneofs_by_name['message'].fields.append(
-  _BOUNCYMESSAGE.fields_by_name['broken_channel_broadcast'])
-_BOUNCYMESSAGE.fields_by_name['broken_channel_broadcast'].containing_oneof = _BOUNCYMESSAGE.oneofs_by_name['message']
 _BOUNCYMESSAGE.oneofs_by_name['message'].fields.append(
   _BOUNCYMESSAGE.fields_by_name['to_original_sender'])
 _BOUNCYMESSAGE.fields_by_name['to_original_sender'].containing_oneof = _BOUNCYMESSAGE.oneofs_by_name['message']
@@ -1022,16 +948,13 @@ _ENDNODEREQUIREMENT.fields_by_name['and'].containing_oneof = _ENDNODEREQUIREMENT
 _ORREQUIREMENT.fields_by_name['requirements'].message_type = _ENDNODEREQUIREMENT
 _ANDREQUIREMENT.fields_by_name['requirements'].message_type = _ENDNODEREQUIREMENT
 _CONNECTIONRESPONSE.fields_by_name['selected_end_node'].message_type = _NODETABLEENTRY
-_CHANNELREQUEST.fields_by_name['challenge'].message_type = _RSACHALLENGE
 _CHANNELREQUEST.fields_by_name['end_node'].message_type = _NODE
 _CHANNELREQUEST.fields_by_name['routing_params'].message_type = _CONNECTIONROUTINGPARAMS
-_CHANNELRESPONSE.fields_by_name['challenge_response'].message_type = _RSACHALLENGERESPONSE
+_CHANNELRESPONSE.fields_by_name['channel_id'].message_type = _CHANNELID
 _TOTARGETSERVER.fields_by_name['channel_id'].message_type = _CHANNELID
 _TOORIGINALSENDER.fields_by_name['channel_id'].message_type = _CHANNELID
-_BROKENCHANNELNOTIFICATION.fields_by_name['broken_channel'].message_type = _CHANNELID
-_BROKENCHANNELBROADCAST.fields_by_name['broken_channel'].message_type = _CHANNELID
-_BROKENCHANNELBROADCAST.fields_by_name['transport_channel'].message_type = _CHANNELID
 _CLOSECONNECTIONREQUEST.fields_by_name['closed_channel'].message_type = _CHANNELID
+_PEERHELLO.fields_by_name['pub_key'].message_type = _RSAPUBKEY
 DESCRIPTOR.message_types_by_name['BouncyMessage'] = _BOUNCYMESSAGE
 DESCRIPTOR.message_types_by_name['RsaChallenge'] = _RSACHALLENGE
 DESCRIPTOR.message_types_by_name['RsaChallengeResponse'] = _RSACHALLENGERESPONSE
@@ -1051,9 +974,8 @@ DESCRIPTOR.message_types_by_name['ChannelResponse'] = _CHANNELRESPONSE
 DESCRIPTOR.message_types_by_name['ChannelID'] = _CHANNELID
 DESCRIPTOR.message_types_by_name['ToTargetServer'] = _TOTARGETSERVER
 DESCRIPTOR.message_types_by_name['ToOriginalSender'] = _TOORIGINALSENDER
-DESCRIPTOR.message_types_by_name['BrokenChannelNotification'] = _BROKENCHANNELNOTIFICATION
-DESCRIPTOR.message_types_by_name['BrokenChannelBroadcast'] = _BROKENCHANNELBROADCAST
 DESCRIPTOR.message_types_by_name['CloseConnectionRequest'] = _CLOSECONNECTIONREQUEST
+DESCRIPTOR.message_types_by_name['PeerHello'] = _PEERHELLO
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 BouncyMessage = _reflection.GeneratedProtocolMessageType('BouncyMessage', (_message.Message,), dict(
@@ -1189,26 +1111,19 @@ ToOriginalSender = _reflection.GeneratedProtocolMessageType('ToOriginalSender', 
   ))
 _sym_db.RegisterMessage(ToOriginalSender)
 
-BrokenChannelNotification = _reflection.GeneratedProtocolMessageType('BrokenChannelNotification', (_message.Message,), dict(
-  DESCRIPTOR = _BROKENCHANNELNOTIFICATION,
-  __module__ = 'bfcp_pb2'
-  # @@protoc_insertion_point(class_scope:bfcp.BrokenChannelNotification)
-  ))
-_sym_db.RegisterMessage(BrokenChannelNotification)
-
-BrokenChannelBroadcast = _reflection.GeneratedProtocolMessageType('BrokenChannelBroadcast', (_message.Message,), dict(
-  DESCRIPTOR = _BROKENCHANNELBROADCAST,
-  __module__ = 'bfcp_pb2'
-  # @@protoc_insertion_point(class_scope:bfcp.BrokenChannelBroadcast)
-  ))
-_sym_db.RegisterMessage(BrokenChannelBroadcast)
-
 CloseConnectionRequest = _reflection.GeneratedProtocolMessageType('CloseConnectionRequest', (_message.Message,), dict(
   DESCRIPTOR = _CLOSECONNECTIONREQUEST,
   __module__ = 'bfcp_pb2'
   # @@protoc_insertion_point(class_scope:bfcp.CloseConnectionRequest)
   ))
 _sym_db.RegisterMessage(CloseConnectionRequest)
+
+PeerHello = _reflection.GeneratedProtocolMessageType('PeerHello', (_message.Message,), dict(
+  DESCRIPTOR = _PEERHELLO,
+  __module__ = 'bfcp_pb2'
+  # @@protoc_insertion_point(class_scope:bfcp.PeerHello)
+  ))
+_sym_db.RegisterMessage(PeerHello)
 
 
 # @@protoc_insertion_point(module_scope)

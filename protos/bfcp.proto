@@ -21,8 +21,6 @@ message BouncyMessage {
        ConnectionResponse connection_response = 4;
        ChannelRequest channel_request = 5;
        ChannelResponse channel_response = 6;
-       BrokenChannelNotification broken_channel_notification = 7;
-       BrokenChannelBroadcast broken_channel_broadcast = 8;
        ToOriginalSender to_original_sender = 9;
        ToTargetServer to_target_server = 10;
        CloseConnectionRequest close_connection_request = 11;
@@ -202,24 +200,21 @@ message ToOriginalSender {
    bytes end_node_signature = 3;
 }
 
-// While a ToOriginalSender message is propagated, and a broken link is found, a
-// BrokenChannelNotification is sent back to the End Node. This way, the End Node can notify the
-// Original Sender about a destroyed channel (using a BrokenChannelBroadcast).
-message BrokenChannelNotification {
-   ChannelID broken_channel = 1;
-}
-
-// BrokenChannelBroadcast is sent by the End Node, whenever it receives a BrokenChannelNotification.
-// This way, the Original Sender can learn about a destroyed channel.
-message BrokenChannelBroadcast {
-   ChannelID broken_channel = 1;
-   ChannelID transport_channel = 2;
-   bytes end_node_signature = 3;
-}
-
 // A CloseConnectionRequest is sent through the channel to notify that start node (SN) want to
 // close the TCP connection with the Target Server.
 message CloseConnectionRequest {
    ChannelID closed_channel = 1;
    bytes original_sender_signature = 2;
+}
+
+// First message sent by both the TCP client and the TCP server when a connection between two BFCP
+// nodes is established.
+message PeerHello {
+    // The public key of the peer. This will be used to perform an RSA challenge
+    RsaPubKey pub_key = 1;
+
+    // The port on which the peer is serving. This is useful for discovery - when a Peer connects as
+    // a TCP client, they can specify what port they are listenning on as a server. Set to <= 0 to
+    // indicate that the peer does not listen for connection (e.g., peers behind NAT, etc.)
+    int32 serving_port = 2;
 }
