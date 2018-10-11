@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='bfcp',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\nbfcp.proto\x12\x04\x62\x66\x63p\"\xfe\x04\n\rBouncyMessage\x12\x33\n\x11\x64iscovery_request\x18\x01 \x01(\x0b\x32\x16.bfcp.DiscoveryRequestH\x00\x12%\n\nnode_table\x18\x02 \x01(\x0b\x32\x0f.bfcp.NodeTableH\x00\x12\x35\n\x12\x63onnection_request\x18\x03 \x01(\x0b\x32\x17.bfcp.ConnectionRequestH\x00\x12\x37\n\x13\x63onnection_response\x18\x04 \x01(\x0b\x32\x18.bfcp.ConnectionResponseH\x00\x12/\n\x0f\x63hannel_request\x18\x05 \x01(\x0b\x32\x14.bfcp.ChannelRequestH\x00\x12\x31\n\x10\x63hannel_response\x18\x06 \x01(\x0b\x32\x15.bfcp.ChannelResponseH\x00\x12\x46\n\x1b\x62roken_channel_notification\x18\x07 \x01(\x0b\x32\x1f.bfcp.BrokenChannelNotificationH\x00\x12@\n\x18\x62roken_channel_broadcast\x18\x08 \x01(\x0b\x32\x1c.bfcp.BrokenChannelBroadcastH\x00\x12\x34\n\x12to_original_sender\x18\t \x01(\x0b\x32\x16.bfcp.ToOriginalSenderH\x00\x12\x30\n\x10to_target_server\x18\n \x01(\x0b\x32\x14.bfcp.ToTargetServerH\x00\x12@\n\x18\x63lose_connection_request\x18\x0b \x01(\x0b\x32\x1c.bfcp.CloseConnectionRequestH\x00\x42\t\n\x07message\"!\n\x0cRsaChallenge\x12\x11\n\tencrypted\x18\x01 \x01(\x0c\")\n\x14RsaChallengeResponse\x12\x11\n\tdecrypted\x18\x01 \x01(\x0c\"\x12\n\x10\x44iscoveryRequest\"I\n\x04Node\x12\x12\n\npublic_key\x18\x01 \x01(\x0c\x12\x1a\n\x12last_known_address\x18\x02 \x01(\t\x12\x11\n\tlast_port\x18\x03 \x01(\x05\"?\n\x0eNodeTableEntry\x12\x18\n\x04node\x18\x01 \x01(\x0b\x32\n.bfcp.Node\x12\x13\n\x0btrust_score\x18\x02 \x01(\x02\"2\n\tNodeTable\x12%\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x14.bfcp.NodeTableEntry\"?\n\x17\x43onnectionRoutingParams\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12\x16\n\x0eremaining_hops\x18\x02 \x01(\x02\"\xdf\x01\n\x11\x43onnectionRequest\x12\x38\n\x11\x63onnection_params\x18\x01 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x36\n\x14\x65nd_node_requirement\x18\x02 \x01(\x0b\x32\x18.bfcp.EndNodeRequirement\x12\x1d\n\x15target_server_address\x18\x03 \x01(\t\x12\x1a\n\x12target_server_port\x18\x04 \x01(\x05\x12\x1d\n\x15sender_connection_key\x18\x05 \x01(\x0c\"\x93\x01\n\x12\x45ndNodeRequirement\x12\x13\n\tip_subnet\x18\x01 \x01(\x05H\x00\x12\x11\n\x07\x63ountry\x18\x02 \x01(\x05H\x00\x12!\n\x02or\x18\x03 \x01(\x0b\x32\x13.bfcp.OrRequirementH\x00\x12#\n\x03\x61nd\x18\x04 \x01(\x0b\x32\x14.bfcp.AndRequirementH\x00\x42\r\n\x0brequirement\"?\n\rOrRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"@\n\x0e\x41ndRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"S\n\x12\x43onnectionResponse\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12/\n\x11selected_end_node\x18\x02 \x01(\x0b\x32\x14.bfcp.NodeTableEntry\"\xc5\x01\n\x0e\x43hannelRequest\x12%\n\tchallenge\x18\x01 \x01(\x0b\x32\x12.bfcp.RsaChallenge\x12\x1c\n\x08\x65nd_node\x18\x02 \x01(\x0b\x32\n.bfcp.Node\x12\x35\n\x0erouting_params\x18\x03 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x14\n\x0c\x63hannel_UUID\x18\x04 \x01(\t\x12!\n\x19original_sender_signature\x18\x05 \x01(\x0c\"_\n\x0f\x43hannelResponse\x12\x36\n\x12\x63hallenge_response\x18\x01 \x01(\x0b\x32\x1a.bfcp.RsaChallengeResponse\x12\x14\n\x0c\x63hannel_seed\x18\x02 \x01(\x0c\":\n\tChannelID\x12\x17\n\x0f\x63onnection_UUID\x18\x01 \x01(\t\x12\x14\n\x0c\x63hannel_UUID\x18\x02 \x01(\t\"i\n\x0eToTargetServer\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x03 \x01(\x0c\"d\n\x10ToOriginalSender\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"D\n\x19\x42rokenChannelNotification\x12\'\n\x0e\x62roken_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\"\x89\x01\n\x16\x42rokenChannelBroadcast\x12\'\n\x0e\x62roken_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12*\n\x11transport_channel\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"d\n\x16\x43loseConnectionRequest\x12\'\n\x0e\x63losed_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x02 \x01(\x0c\x62\x06proto3')
+  serialized_pb=_b('\n\nbfcp.proto\x12\x04\x62\x66\x63p\"\xfe\x04\n\rBouncyMessage\x12\x33\n\x11\x64iscovery_request\x18\x01 \x01(\x0b\x32\x16.bfcp.DiscoveryRequestH\x00\x12%\n\nnode_table\x18\x02 \x01(\x0b\x32\x0f.bfcp.NodeTableH\x00\x12\x35\n\x12\x63onnection_request\x18\x03 \x01(\x0b\x32\x17.bfcp.ConnectionRequestH\x00\x12\x37\n\x13\x63onnection_response\x18\x04 \x01(\x0b\x32\x18.bfcp.ConnectionResponseH\x00\x12/\n\x0f\x63hannel_request\x18\x05 \x01(\x0b\x32\x14.bfcp.ChannelRequestH\x00\x12\x31\n\x10\x63hannel_response\x18\x06 \x01(\x0b\x32\x15.bfcp.ChannelResponseH\x00\x12\x46\n\x1b\x62roken_channel_notification\x18\x07 \x01(\x0b\x32\x1f.bfcp.BrokenChannelNotificationH\x00\x12@\n\x18\x62roken_channel_broadcast\x18\x08 \x01(\x0b\x32\x1c.bfcp.BrokenChannelBroadcastH\x00\x12\x34\n\x12to_original_sender\x18\t \x01(\x0b\x32\x16.bfcp.ToOriginalSenderH\x00\x12\x30\n\x10to_target_server\x18\n \x01(\x0b\x32\x14.bfcp.ToTargetServerH\x00\x12@\n\x18\x63lose_connection_request\x18\x0b \x01(\x0b\x32\x1c.bfcp.CloseConnectionRequestH\x00\x42\t\n\x07message\"!\n\x0cRsaChallenge\x12\x11\n\tencrypted\x18\x01 \x01(\x0c\")\n\x14RsaChallengeResponse\x12\x11\n\tdecrypted\x18\x01 \x01(\x0c\"2\n\tRsaPubKey\x12\x0f\n\x07modulus\x18\x01 \x01(\x0c\x12\x14\n\x0cpub_exponent\x18\x02 \x01(\x0c\"\x12\n\x10\x44iscoveryRequest\"I\n\x04Node\x12\x12\n\npublic_key\x18\x01 \x01(\x0c\x12\x1a\n\x12last_known_address\x18\x02 \x01(\t\x12\x11\n\tlast_port\x18\x03 \x01(\x05\"?\n\x0eNodeTableEntry\x12\x18\n\x04node\x18\x01 \x01(\x0b\x32\n.bfcp.Node\x12\x13\n\x0btrust_score\x18\x02 \x01(\x02\"2\n\tNodeTable\x12%\n\x07\x65ntries\x18\x01 \x03(\x0b\x32\x14.bfcp.NodeTableEntry\"?\n\x17\x43onnectionRoutingParams\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12\x16\n\x0eremaining_hops\x18\x02 \x01(\x02\"\xdf\x01\n\x11\x43onnectionRequest\x12\x38\n\x11\x63onnection_params\x18\x01 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x36\n\x14\x65nd_node_requirement\x18\x02 \x01(\x0b\x32\x18.bfcp.EndNodeRequirement\x12\x1d\n\x15target_server_address\x18\x03 \x01(\t\x12\x1a\n\x12target_server_port\x18\x04 \x01(\x05\x12\x1d\n\x15sender_connection_key\x18\x05 \x01(\x0c\"\x93\x01\n\x12\x45ndNodeRequirement\x12\x13\n\tip_subnet\x18\x01 \x01(\x05H\x00\x12\x11\n\x07\x63ountry\x18\x02 \x01(\x05H\x00\x12!\n\x02or\x18\x03 \x01(\x0b\x32\x13.bfcp.OrRequirementH\x00\x12#\n\x03\x61nd\x18\x04 \x01(\x0b\x32\x14.bfcp.AndRequirementH\x00\x42\r\n\x0brequirement\"?\n\rOrRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"@\n\x0e\x41ndRequirement\x12.\n\x0crequirements\x18\x01 \x03(\x0b\x32\x18.bfcp.EndNodeRequirement\"S\n\x12\x43onnectionResponse\x12\x0c\n\x04UUID\x18\x01 \x01(\t\x12/\n\x11selected_end_node\x18\x02 \x01(\x0b\x32\x14.bfcp.NodeTableEntry\"\xc5\x01\n\x0e\x43hannelRequest\x12%\n\tchallenge\x18\x01 \x01(\x0b\x32\x12.bfcp.RsaChallenge\x12\x1c\n\x08\x65nd_node\x18\x02 \x01(\x0b\x32\n.bfcp.Node\x12\x35\n\x0erouting_params\x18\x03 \x01(\x0b\x32\x1d.bfcp.ConnectionRoutingParams\x12\x14\n\x0c\x63hannel_UUID\x18\x04 \x01(\t\x12!\n\x19original_sender_signature\x18\x05 \x01(\x0c\"_\n\x0f\x43hannelResponse\x12\x36\n\x12\x63hallenge_response\x18\x01 \x01(\x0b\x32\x1a.bfcp.RsaChallengeResponse\x12\x14\n\x0c\x63hannel_seed\x18\x02 \x01(\x0c\":\n\tChannelID\x12\x17\n\x0f\x63onnection_UUID\x18\x01 \x01(\t\x12\x14\n\x0c\x63hannel_UUID\x18\x02 \x01(\t\"i\n\x0eToTargetServer\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x03 \x01(\x0c\"d\n\x10ToOriginalSender\x12\x0f\n\x07payload\x18\x01 \x01(\x0c\x12#\n\nchannel_id\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"D\n\x19\x42rokenChannelNotification\x12\'\n\x0e\x62roken_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\"\x89\x01\n\x16\x42rokenChannelBroadcast\x12\'\n\x0e\x62roken_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12*\n\x11transport_channel\x18\x02 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12\x1a\n\x12\x65nd_node_signature\x18\x03 \x01(\x0c\"d\n\x16\x43loseConnectionRequest\x12\'\n\x0e\x63losed_channel\x18\x01 \x01(\x0b\x32\x0f.bfcp.ChannelID\x12!\n\x19original_sender_signature\x18\x02 \x01(\x0c\x62\x06proto3')
 )
 
 
@@ -191,6 +191,44 @@ _RSACHALLENGERESPONSE = _descriptor.Descriptor(
 )
 
 
+_RSAPUBKEY = _descriptor.Descriptor(
+  name='RsaPubKey',
+  full_name='bfcp.RsaPubKey',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='modulus', full_name='bfcp.RsaPubKey.modulus', index=0,
+      number=1, type=12, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b(""),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='pub_exponent', full_name='bfcp.RsaPubKey.pub_exponent', index=1,
+      number=2, type=12, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b(""),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=739,
+  serialized_end=789,
+)
+
+
 _DISCOVERYREQUEST = _descriptor.Descriptor(
   name='DiscoveryRequest',
   full_name='bfcp.DiscoveryRequest',
@@ -210,8 +248,8 @@ _DISCOVERYREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=739,
-  serialized_end=757,
+  serialized_start=791,
+  serialized_end=809,
 )
 
 
@@ -255,8 +293,8 @@ _NODE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=759,
-  serialized_end=832,
+  serialized_start=811,
+  serialized_end=884,
 )
 
 
@@ -293,8 +331,8 @@ _NODETABLEENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=834,
-  serialized_end=897,
+  serialized_start=886,
+  serialized_end=949,
 )
 
 
@@ -324,8 +362,8 @@ _NODETABLE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=899,
-  serialized_end=949,
+  serialized_start=951,
+  serialized_end=1001,
 )
 
 
@@ -362,8 +400,8 @@ _CONNECTIONROUTINGPARAMS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=951,
-  serialized_end=1014,
+  serialized_start=1003,
+  serialized_end=1066,
 )
 
 
@@ -421,8 +459,8 @@ _CONNECTIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1017,
-  serialized_end=1240,
+  serialized_start=1069,
+  serialized_end=1292,
 )
 
 
@@ -476,8 +514,8 @@ _ENDNODEREQUIREMENT = _descriptor.Descriptor(
       name='requirement', full_name='bfcp.EndNodeRequirement.requirement',
       index=0, containing_type=None, fields=[]),
   ],
-  serialized_start=1243,
-  serialized_end=1390,
+  serialized_start=1295,
+  serialized_end=1442,
 )
 
 
@@ -507,8 +545,8 @@ _ORREQUIREMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1392,
-  serialized_end=1455,
+  serialized_start=1444,
+  serialized_end=1507,
 )
 
 
@@ -538,8 +576,8 @@ _ANDREQUIREMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1457,
-  serialized_end=1521,
+  serialized_start=1509,
+  serialized_end=1573,
 )
 
 
@@ -576,8 +614,8 @@ _CONNECTIONRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1523,
-  serialized_end=1606,
+  serialized_start=1575,
+  serialized_end=1658,
 )
 
 
@@ -635,8 +673,8 @@ _CHANNELREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1609,
-  serialized_end=1806,
+  serialized_start=1661,
+  serialized_end=1858,
 )
 
 
@@ -673,8 +711,8 @@ _CHANNELRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1808,
-  serialized_end=1903,
+  serialized_start=1860,
+  serialized_end=1955,
 )
 
 
@@ -711,8 +749,8 @@ _CHANNELID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1905,
-  serialized_end=1963,
+  serialized_start=1957,
+  serialized_end=2015,
 )
 
 
@@ -756,8 +794,8 @@ _TOTARGETSERVER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1965,
-  serialized_end=2070,
+  serialized_start=2017,
+  serialized_end=2122,
 )
 
 
@@ -801,8 +839,8 @@ _TOORIGINALSENDER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2072,
-  serialized_end=2172,
+  serialized_start=2124,
+  serialized_end=2224,
 )
 
 
@@ -832,8 +870,8 @@ _BROKENCHANNELNOTIFICATION = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2174,
-  serialized_end=2242,
+  serialized_start=2226,
+  serialized_end=2294,
 )
 
 
@@ -877,8 +915,8 @@ _BROKENCHANNELBROADCAST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2245,
-  serialized_end=2382,
+  serialized_start=2297,
+  serialized_end=2434,
 )
 
 
@@ -915,8 +953,8 @@ _CLOSECONNECTIONREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2384,
-  serialized_end=2484,
+  serialized_start=2436,
+  serialized_end=2536,
 )
 
 _BOUNCYMESSAGE.fields_by_name['discovery_request'].message_type = _DISCOVERYREQUEST
@@ -997,6 +1035,7 @@ _CLOSECONNECTIONREQUEST.fields_by_name['closed_channel'].message_type = _CHANNEL
 DESCRIPTOR.message_types_by_name['BouncyMessage'] = _BOUNCYMESSAGE
 DESCRIPTOR.message_types_by_name['RsaChallenge'] = _RSACHALLENGE
 DESCRIPTOR.message_types_by_name['RsaChallengeResponse'] = _RSACHALLENGERESPONSE
+DESCRIPTOR.message_types_by_name['RsaPubKey'] = _RSAPUBKEY
 DESCRIPTOR.message_types_by_name['DiscoveryRequest'] = _DISCOVERYREQUEST
 DESCRIPTOR.message_types_by_name['Node'] = _NODE
 DESCRIPTOR.message_types_by_name['NodeTableEntry'] = _NODETABLEENTRY
@@ -1037,6 +1076,13 @@ RsaChallengeResponse = _reflection.GeneratedProtocolMessageType('RsaChallengeRes
   # @@protoc_insertion_point(class_scope:bfcp.RsaChallengeResponse)
   ))
 _sym_db.RegisterMessage(RsaChallengeResponse)
+
+RsaPubKey = _reflection.GeneratedProtocolMessageType('RsaPubKey', (_message.Message,), dict(
+  DESCRIPTOR = _RSAPUBKEY,
+  __module__ = 'bfcp_pb2'
+  # @@protoc_insertion_point(class_scope:bfcp.RsaPubKey)
+  ))
+_sym_db.RegisterMessage(RsaPubKey)
 
 DiscoveryRequest = _reflection.GeneratedProtocolMessageType('DiscoveryRequest', (_message.Message,), dict(
   DESCRIPTOR = _DISCOVERYREQUEST,

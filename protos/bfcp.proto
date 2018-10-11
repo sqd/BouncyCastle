@@ -45,6 +45,13 @@ message RsaChallengeResponse {
    bytes decrypted = 1;
 }
 
+// RsaPubKey represents a public RSA key
+message RsaPubKey {
+    // All of these integers are big endian
+    bytes modulus = 1;
+    bytes pub_exponent = 2;
+}
+
 // In order for nodes to learn about other nodes within the network, the nodes perform discovery
 // operations. This is done, by a node going to one of its trusted nodes, and askimg them for their
 // list of trusted nodes.

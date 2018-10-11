@@ -18,6 +18,10 @@ class TestHandshake(unittest.TestCase):
         decrypted, challenge = handshake.make_rsa_challenge(key.publickey())
         self.assertRaises(ValueError, lambda: handshake.solve_rsa_challenge(key2, challenge))
 
+    def test_pub_key_encoding(self):
+        key = RSA.generate(1024).publickey()
+        self.assertEqual(handshake.proto_to_pubkey(handshake.pubkey_to_proto(key)), key)
+
 
 if __name__ == '__main__':
     unittest.main()
