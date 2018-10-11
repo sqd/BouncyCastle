@@ -168,18 +168,16 @@ message ConnectionResponse {
 // nodes on the way of the channel remember their routing decision for this particular channel
 // so that the messages can be resent through the same path.
 message ChannelRequest {
-   RsaChallenge challenge = 1;
-   Node end_node = 2;
-   ConnectionRoutingParams routing_params = 3;
-   string channel_UUID = 4;
-   bytes original_sender_signature = 5;
+   Node end_node = 1;
+   ConnectionRoutingParams routing_params = 2;
+   string channel_UUID = 3;
+   bytes original_sender_signature = 4;
 }
 
 // A ChannelResponse is a response to a ChannelRequest from end node (EN) to start node (SN)
 // so that SN can know a channel was established.
 message ChannelResponse {
-   RsaChallengeResponse challenge_response = 1;
-   bytes channel_seed = 2;
+   ChannelID channel_id = 1;
 }
 
 // A ChannelID is used to identify a specific channel within a specific connection.
