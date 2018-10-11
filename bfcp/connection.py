@@ -19,11 +19,11 @@ class Connection:
     def __init__(self):
         self._on_new_data: List[Callable[[bytes], None]] = []
         self._on_closed: List[Callable[[Exception], None]] = []
+        self._on_established: List[Callable[[Exception], None]] = []
 
     async def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: str, ts_port: int = 80):
         """
-        This function can only be called once. This will initiate the connection and return once the
-        connection is stable and ready to transfer information.
+        This function can only be called once.
         Args:
             en_requirement: EndNodeRequirement from client configurations
             ts_address: string address clients want to connect to
@@ -77,6 +77,29 @@ class Connection:
         """
         self._on_new_data.remove(callback)
 
+    def register_on_established(self, callback: Callable[[Exception], None]) -> None:
+        """
+        Registers a callback for whenever the connection is securely established. If the Connection
+        fails to be established, an Exception is passed to the callback. Otherwise, None is passed.
+        """
+        self._on_established.append(callback)
+
+    def unregister_on_established(self, callback: Callable[[Exception], None]) -> None:
+        """
+        Unregisters the specified callback function. Note, this needs to be the same object as was
+        passed into register_on_established().
+
+        Example:
+
+            callback = lambda err: print(err)
+            connection.register_on_established(callback)
+
+            # Do something ...
+
+            connection.unregister_on_established(callback)
+        """
+        self._on_established.remove(callback)
+
     def register_on_closed(self, callback: Callable[[Exception], None]) -> None:
         """
         Registers a callback for whenever the target server closes the connection.
@@ -102,6 +125,7 @@ class Connection:
         """
         self._on_closed.remove(callback)
 
+
 def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_manager: TrafficManager):
     """
     Static function that receives a connections request and 
@@ -119,7 +143,6 @@ def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_
         # remaining_hops is negative, meaning that we were not able to
         # find a connection with desired requirements
         # thus, drop the connection
-
 
 
 class SocketConnection:
