@@ -4,7 +4,8 @@ import protos.bfcp_pb2 as bfcp_pb2
 from random import randint
 from uuid import uuid4
 import handshake
-from bfcp.messages import TrafficManager
+from bfcp.messages import TrafficManager, NodeNotFoundError
+from bfcp.trust import TrustTableManager
 
 import utils
 
@@ -207,12 +208,18 @@ def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_
         if remaining_hops == 1:
             # send to bouncy node that is well-suited to become EN 
             # if we want to access contents from China, EN should be in China
+            trust_table_manager = TrustTableManager()
+            pub_key = trust_table_manager.get_pubkey_by_node_requirement(conn_request.end_node_requirement)
+            traffic_manager.send(pub_key, conn_request)
         else:
             # bounce to any random bouncy node
+            # TODO: implement TrafficManager.run and provide arguments
+            traffic_manager.run()
     else:
         # remaining_hops is negative, meaning that we were not able to
         # find a connection with desired requirements
         # thus, drop the connection
+        raise NodeNotFoundError('A node suitable for becoming EN was not found')
 
 
 class SocketConnection:
