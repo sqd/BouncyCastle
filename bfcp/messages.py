@@ -7,7 +7,7 @@ from typing import Tuple, Callable
 from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.trust import TrustTableManager
-from protos.bfcp_pb2 import BouncyMessage
+from protos.bfcp_pb2 import BouncyMessage, ConnectionResponse
 
 
 class NodeNotFoundError(Exception):
@@ -53,3 +53,7 @@ class TrafficManager:
         this function never returns.
         """
         raise NotImplementedError()
+
+def handle_message(msg, sender_key, traffic_manager):
+    if isinstance(msg, bfcp_pb2.ConnectionResponse):
+        conn_manager.on_conn_response(msg, sender_key)

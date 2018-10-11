@@ -1,11 +1,29 @@
 import threading
-from typing import Callable, List
+from typing import Callable, List, Tuple
 import protos.bfcp_pb2 as bfcp_pb2
 from random import randint
 from uuid import uuid4
+import handshake
 from bfcp.messages import TrafficManager
 
 import utils
+
+class ConnectionManager:
+    def __init__(self, traffic_manager):
+        self._connections = dict()
+        self._traffic_manager = traffic_manager
+
+    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
+        conn = connection.Connection(self._traffic_manager)
+        conn.initiate_connection(en_requirement, ts_address)
+        return conn
+
+    def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key):
+        try:
+            conn = self._connections[msg.UUID]
+        except KeyError:
+            raise NotImplementedError()
+        conn.on_en_found(msg.selected_end_node)
 
 
 class Connection:
@@ -16,18 +34,18 @@ class Connection:
     It is required to call initiate_connection() after creating the Connection object. Only then
     will the connection be formed.
     """
-    def __init__(self):
+    def __init__(self, traffic_manager):
         self._on_new_data: List[Callable[[bytes], None]] = []
         self._on_closed: List[Callable[[Exception], None]] = []
         self._on_established: List[Callable[[Exception], None]] = []
+        self._traffic_manager = traffic_manager
+        self._channels = []
 
-    async def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: str, ts_port: int = 80):
+    def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
         """
         This function can only be called once.
-        Args:
-            en_requirement: EndNodeRequirement from client configurations
-            ts_address: string address clients want to connect to
-            ts_port: int port number client wants to connect to
+        @param en_requirement: EndNodeRequirement from client configurations
+        @param ts_address: string address clients want to connect to
         """
         connection_params = bfcp_pb2.ConnectionRoutingParams()
         connection_params.UUID = str(uuid4())
@@ -35,24 +53,28 @@ class Connection:
 
         self._end_node_requirement = en_requirement
         self._target_server_address = ts_address
-        self._target_server_port = ts_port
 
         self.sender_connection_signing_key = self.generate_public_key()
 
         connection_request = bfcp_pb2.ConnectionRequest()
         connection_request.connection_params = connection_params
         connection_request.end_node_requirement = end_node_requirement
-        connection_request.target_server_address = target_server_address
-        connection_request.target_server_port = target_server_port
+        connection_request.target_server_address = ts_address[0]
+        connection_request.target_server_port = ts_address[1]
         connection_request.sender_connection_signing_key = sender_connection_signing_key
 
-        # TODO: wait until connection is established
+        handle_connection_request(connection_request, self._traffic_manager)
 
 
     def send(self, data: bytes):
         """
         Sends the specified data to the target server. This is a non-blocking call.
         """
+        payload_message = bfcp_pb2.ToTargetServer()
+        payload_message.payload = data
+        for channel in self._channels:
+            payload_message.channel_id = channel.id
+            self._traffic_manager.send(channel.next_hop_pub_key, payload_message)
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
         """
@@ -246,3 +268,15 @@ class SocketConnection:
         with self._lock:
             self._buffer.write(data)
             self._condition.notify_all()
+
+    def on_en_found(self, en):
+        # Found an EN, now try to establish channels
+        raise NotImplementedError()
+        channel_uuid = uuid.uuid4()
+        channel_request = bfcp_pb2.ChannelRequest()
+        channel_request.challenge = handshake.make_rsa_challenge() # TODO
+        channel_request.end_node =  en
+        channel_request.channel_UUID = channel_uuid
+        channel_request.original_sender_signature = raise NotImplementedError()
+
+        self._traffic_manager.on_new_message(channel_request, my_key, self._traffic_manager)
