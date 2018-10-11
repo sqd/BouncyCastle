@@ -11,6 +11,7 @@ import utils
 class ConnectionManager:
     def __init__(self, traffic_manager):
         self._connections = dict() # connection uuid -> connection
+        self._channels_2_conn = dict() # channel id -> connection class
         self._traffic_manager = traffic_manager
 
     def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
@@ -30,7 +31,15 @@ class ConnectionManager:
             conn = self._connections[msg.channel_id.connection_UUID]
         except KeyError:
             raise NotImplementedError()
+        self._channels_2_conn[msg.channel_id.channel_UUID] = conn
         conn.on_channel_established(msg.channel_id.channel_UUID, sender_key)
+
+    def on_payload_received(self, msg: bfcp_pb2.ToOriginalSender):
+        try:
+            conn = self._channels_2_conn[msg.channel_id]
+        except KeyError:
+            raise NotImplementedError()
+        conn.on_payload_received(msg)
 
 
 class Connection:
@@ -47,6 +56,9 @@ class Connection:
         self._on_established: List[Callable[[Exception], None]] = []
         self._traffic_manager = traffic_manager
         self._channels = [] # list of (uuid, next hop pub key)
+        self._next_recv_index = 0
+        self._future_packets = dict() # index -> msg
+        self._next_send_index = 0
 
     def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
         """
@@ -88,6 +100,17 @@ class Connection:
     def on_channel_established(self, channel_uuid, next_hop_pub_key):
         self._channels.append((channel_uuid, next_hop_pub_key))
 
+    def on_payload_received(msg: bfcp_pb2.ToOriginalSender):
+        if msg.index >= self._next_recv_index:
+            self._future_packets[msg.index] = msg
+
+
+        while self._next_recv_index in self._future_packets:
+            for callback in self._on_new_data:
+                callback(msg.payload)
+            del(self._future_packets[self._next_recv_index])
+            self._next_recv_index += 1
+
 
     def send(self, data: bytes):
         """
@@ -97,7 +120,9 @@ class Connection:
             payload_message = bfcp_pb2.ToTargetServer()
             payload_message.payload = data
             payload_message.channel_id = channel_uuid
+            payload_message.index = self._next_send_index
             self._traffic_manager.send(next_hop_pub_key, payload_message)
+        self._next_send_index += 1
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
         """

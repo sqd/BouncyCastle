@@ -59,3 +59,5 @@ def handle_message(msg, sender_key, traffic_manager):
         conn_manager.on_conn_response(msg, sender_key)
     elif isinstance(msg, bfcp_pb2.ChannelResponse):
         conn_manager.on_channel_response(msg, sender_key)
+    elif isinstance(msg, bfcp_pb2.ToOriginalSender):
+        conn_manager.on_payload_received(msg)
