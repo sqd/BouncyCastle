@@ -10,7 +10,7 @@ import utils
 
 class ConnectionManager:
     def __init__(self, traffic_manager):
-        self._connections = dict()
+        self._connections = dict() # connection uuid -> connection
         self._traffic_manager = traffic_manager
 
     def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
@@ -24,6 +24,13 @@ class ConnectionManager:
         except KeyError:
             raise NotImplementedError()
         conn.on_en_found(msg.selected_end_node)
+
+    def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key):
+        try:
+            conn = self._connections[msg.channel_id.connection_UUID]
+        except KeyError:
+            raise NotImplementedError()
+        conn.on_channel_established(msg.channel_id.channel_UUID, sender_key)
 
 
 class Connection:
@@ -39,7 +46,7 @@ class Connection:
         self._on_closed: List[Callable[[Exception], None]] = []
         self._on_established: List[Callable[[Exception], None]] = []
         self._traffic_manager = traffic_manager
-        self._channels = []
+        self._channels = [] # list of (uuid, next hop pub key)
 
     def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
         """
@@ -65,16 +72,32 @@ class Connection:
 
         handle_connection_request(connection_request, self._traffic_manager)
 
+    def on_en_found(self, en):
+        # Found an EN, now try to establish channels
+        raise NotImplementedError()
+        channel_uuid = uuid.uuid4()
+        channel_request = bfcp_pb2.ChannelRequest()
+        channel_request.challenge = handshake.make_rsa_challenge() # TODO
+        channel_request.end_node =  en
+        channel_request.channel_UUID = channel_uuid
+        channel_request.original_sender_signature = raise NotImplementedError()
+
+        for i in range(config.n_channel):
+            self._traffic_manager.on_new_message(channel_request, my_key, self._traffic_manager)
+
+    def on_channel_established(self, channel_uuid, next_hop_pub_key):
+        self._channels.append((channel_uuid, next_hop_pub_key))
+
 
     def send(self, data: bytes):
         """
         Sends the specified data to the target server. This is a non-blocking call.
         """
-        payload_message = bfcp_pb2.ToTargetServer()
-        payload_message.payload = data
-        for channel in self._channels:
-            payload_message.channel_id = channel.id
-            self._traffic_manager.send(channel.next_hop_pub_key, payload_message)
+        for (channel_uuid, next_hop_pub_key) in self._channels:
+            payload_message = bfcp_pb2.ToTargetServer()
+            payload_message.payload = data
+            payload_message.channel_id = channel_uuid
+            self._traffic_manager.send(next_hop_pub_key, payload_message)
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
         """
@@ -268,15 +291,3 @@ class SocketConnection:
         with self._lock:
             self._buffer.write(data)
             self._condition.notify_all()
-
-    def on_en_found(self, en):
-        # Found an EN, now try to establish channels
-        raise NotImplementedError()
-        channel_uuid = uuid.uuid4()
-        channel_request = bfcp_pb2.ChannelRequest()
-        channel_request.challenge = handshake.make_rsa_challenge() # TODO
-        channel_request.end_node =  en
-        channel_request.channel_UUID = channel_uuid
-        channel_request.original_sender_signature = raise NotImplementedError()
-
-        self._traffic_manager.on_new_message(channel_request, my_key, self._traffic_manager)
