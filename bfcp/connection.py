@@ -18,11 +18,11 @@ class Connection:
     def __init__(self):
         self._on_new_data: List[Callable[[bytes], None]] = []
         self._on_closed: List[Callable[[Exception], None]] = []
+        self._on_established: List[Callable[[Exception], None]] = []
 
-    async def initiate_connection(self, _en_requirement: bfcp_pb2.EndNodeRequirement, _ts_address: str, _ts_port = 80: int):
+    def initiate_connection(self, _en_requirement: bfcp_pb2.EndNodeRequirement, _ts_address: str, _ts_port = 80: int):
         """
-        This function can only be called once. This will initiate the connection and return once the
-        connection is stable and ready to transfer information.
+        This function can only be called once.
         Args:
             en_requirement: EndNodeRequirement from client configurations
             _ts_address: string address clients want to connect to
@@ -75,6 +75,29 @@ class Connection:
             connection.unregister_on_new_data(callback)
         """
         self._on_new_data.remove(callback)
+
+    def register_on_established(self, callback: Callable[[Exception], None]) -> None:
+        """
+        Registers a callback for whenever the connection is securely established. If the Connection
+        fails to be established, an Exception is passed to the callback. Otherwise, None is passed.
+        """
+        self._on_established.append(callback)
+
+    def unregister_on_established(self, callback: Callable[[Exception], None]) -> None:
+        """
+        Unregisters the specified callback function. Note, this needs to be the same object as was
+        passed into register_on_established().
+
+        Example:
+
+            callback = lambda err: print(err)
+            connection.register_on_established(callback)
+
+            # Do something ...
+
+            connection.unregister_on_established(callback)
+        """
+        self._on_established.remove(callback)
 
     def register_on_closed(self, callback: Callable[[Exception], None]) -> None:
         """
