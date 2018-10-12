@@ -22,6 +22,42 @@ class TestHandshake(unittest.TestCase):
         key = RSA.generate(1024).publickey()
         self.assertEqual(handshake.proto_to_pubkey(handshake.pubkey_to_proto(key)), key)
 
+    def test_handshake(self):
+        peer1_rsa = RSA.generate(2048)
+        peer2_rsa = RSA.generate(2048)
+
+        peer1_serving_port = None
+        peer2_serving_port = 1234
+
+        messages_for_peer1 = []
+        messages_for_peer2 = []
+
+        peer1_handshake = handshake.PeerHandshake(peer1_rsa, peer1_serving_port,
+                                                  lambda msg: messages_for_peer2.append(msg))
+        peer2_handshake = handshake.PeerHandshake(peer2_rsa, peer2_serving_port,
+                                                  lambda msg: messages_for_peer1.append(msg))
+
+        while not (messages_for_peer1 == [] and messages_for_peer2 == []):
+            for msg in messages_for_peer1:
+                peer1_handshake.handle_message(msg.SerializeToString())
+            messages_for_peer1 = []
+
+            for msg in messages_for_peer2:
+                peer2_handshake.handle_message(msg.SerializeToString())
+            messages_for_peer2 = []
+
+        self.assertTrue(peer1_handshake.complete)
+        self.assertTrue(peer2_handshake.complete)
+
+        self.assertIsNotNone(peer1_handshake.session_key)
+        self.assertEqual(peer1_handshake.session_key, peer2_handshake.session_key)
+
+        self.assertEqual(peer1_handshake.peer_pub_key, peer2_rsa.publickey())
+        self.assertEqual(peer2_handshake.peer_pub_key, peer1_rsa.publickey())
+
+        self.assertEqual(peer1_handshake.peer_serving_port, peer2_serving_port)
+        self.assertEqual(peer2_handshake.peer_serving_port, peer1_serving_port)
+
 
 if __name__ == '__main__':
     unittest.main()

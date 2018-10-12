@@ -219,3 +219,9 @@ message PeerHello {
     // indicate that the peer does not listen for connection (e.g., peers behind NAT, etc.)
     int32 serving_port = 2;
 }
+
+// Bytes of an AES key
+message AESKey {
+    // The public key of the peer. This will be used to perform an RSA challenge
+    bytes key = 1;
+}
