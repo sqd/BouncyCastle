@@ -161,10 +161,8 @@ class TrafficManager:
         elif isinstance(msg, bfcp_pb2.ToOriginalSender):
             conn_manager.on_payload_received(msg)
         # we're helping out other people below this line
-        elif isinstance(msg, bfcp_pb2.ToTargetServer):
-            pass
-        elif isinstance(msg, bfcp_pb2.ToTargetServer):
-            pass
+        elif isinstance(msg, bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer):
+            conn_manager.on_payload_received(msg)
 
     def handle_message_bytes(self, data: bytes) -> None:
         new_message = BouncyMessage()

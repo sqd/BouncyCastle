@@ -12,10 +12,10 @@ import utils
 class ConnectionManager:
     def __init__(self, traffic_manager):
         self._os_connections = dict() # connections originated from this node, connection uuid -> connection
-        self._relay_connections = dict() # connections that are just passing through, connection uuid -> pubkey of prev hop
+        self._relay_connections = dict() # connection requests that are just passing through, connection uuid -> (pubkey of prev hop, pubkehy of next hop)
 
         self._os_channels_2_conn = dict() # channels that are used by this node, channel id -> connection class
-        self._relay_channels_2_prev_hop = dict() # channels that are just passing through, channel id -> pubkey of prev hop
+        self._relay_channels = dict() # channels that are just passing through, channel id -> (pubkey of prev hop, pubkey of next hop)
         self._traffic_manager = traffic_manager
 
     class ReceiverType(Enum):
@@ -34,7 +34,7 @@ class ConnectionManager:
         if channel_UUID:
             if channel_UUID in self._os_channels_2_conn:
                 return ReceiverType.origin
-            elif channel_UUID in self._relay_channels_2_prev_hop:
+            elif channel_UUID in self._relay_channels:
                 return ReceiverType.relay
             else:
                 return ReceiverType.neither
@@ -52,7 +52,7 @@ class ConnectionManager:
             return
         else:
             # TODO choose node logic here
-            self._relay_connections[msg.conn_UUID] = sender_key
+            self._relay_connections[msg.conn_UUID] = (sender_key, next_node.pub_key)
             self._traffic_manager.send(choose_a_node.pub_key, msg)
 
     def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key):
@@ -60,7 +60,7 @@ class ConnectionManager:
         if receiver_type == ReceiverType.origin:
             self._os_connections[msg.UUID].on_EN_found(msg.selected_end_node)
         elif receiver_type == ReceiverType.relay:
-            self._traffic_manager.send(self._relay_connections[UUID], msg)
+            self._traffic_manager.send(self._relay_connections[UUID][0], msg)
         else:
             # TODO wtf
             return
@@ -71,32 +71,29 @@ class ConnectionManager:
             # TODO wtf
             return
         else:
-            self._relay_channels_2_prev_hop[msg.channel_UUID] = sender_key
-            self._traffic_manager.send(self._relay_connections[UUID], msg)
-            return
+            self._relay_channels[msg.channel_UUID] = (sender_key, choose_a_node.pub_key)
+            self._traffic_manager.send(choose_a_node.pub_key, msg)
 
     def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key):
         receiver_type = self.relay_or_origin(channel_UUID=msg.channel_id)
         if receiver_type == ReceiverType.origin:
-            self._os_channels_2_conn[msg.channel_id].on_channel_established(msg.selected_end_node)
+            self._os_channels_2_conn[msg.channel_id].on_channel_established(msg.channel_uuid, sender_key)
         elif receiver_type == ReceiverType.relay:
-            self._traffic_manager.send(self._relay_connections[UUID], msg)
+            self._traffic_manager.send(self._relay_channels_2_prev_hop[msg.channel_id][0], msg)
         else:
             # TODO wtf
             return
-        try:
-            conn = self._connections[msg.channel_id.connection_UUID]
-        except KeyError:
-            raise NotImplementedError()
-        self._channels_2_conn[msg.channel_id.channel_UUID] = conn
-        conn.on_channel_established(msg.channel_id.channel_UUID, sender_key)
 
-    def on_payload_received(self, msg: bfcp_pb2.ToOriginalSender):
-        try:
-            conn = self._channels_2_conn[msg.channel_id]
-        except KeyError:
-            raise NotImplementedError()
-        conn.on_payload_received(msg)
+    def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer]):
+        receiver_type = self.relay_or_origin(channel_UUID=msg.channel_id)
+        if receiver_type == ReceiverType.origin:
+            self._os_channels_2_conn[msg.channel_id].on_payload_received(msg)
+        elif receiver_type == ReceiverType.relay:
+            dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
+            self._traffic_manager.send(self._relay_channels[msg.channel_id][dir_idx], msg)
+        else:
+            # TODO wtf
+            return
 
 
 class Connection:
@@ -145,15 +142,16 @@ class Connection:
 
     def on_EN_found(self, en):
         # Found an EN, now try to establish channels
-        raise NotImplementedError()
-        channel_uuid = uuid.uuid4()
-        channel_request = bfcp_pb2.ChannelRequest()
-        channel_request.challenge = handshake.make_rsa_challenge() # TODO
-        channel_request.end_node =  en
-        channel_request.channel_UUID = channel_uuid
-        channel_request.original_sender_signature = raise NotImplementedError()
 
-        for i in range(config.n_channel):
+        for i in range(config.channel_number):
+            channel_uuid = str(uuid4())
+            channel_request = bfcp_pb2.ChannelRequest()
+            channel_request.challenge = handshake.make_rsa_challenge() # TODO
+            channel_request.end_node = en
+            channel_request.channel_UUID = channel_uuid
+            channel_request.original_sender_signature = raise NotImplementedError()
+
+            self._conn_manager.register_os_channel(channel_uuid)
             self._traffic_manager.send(choose_a_node.pub_key, channel_request) # TODO choose a node
 
     def on_channel_established(self, channel_uuid, next_hop_pub_key):
