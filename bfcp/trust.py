@@ -22,6 +22,8 @@ class TrustTableManager:
         raise NotImplementedError()
 
     def get_node_by_pubkey(self, pubkey: RsaKey) -> NodeTableEntry:
+        """ Returns NodeTableEntry in self.node_table contains an entry that match given pubkey,
+          else return None """
         for node_table_entry in self.node_table.entries:
             node = node_table_entry.node
             # TODO check if node.public_key == pubkey
