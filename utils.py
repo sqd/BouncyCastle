@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
+import hashlib
 import io
+import struct
 from typing import Generic, TypeVar
+
+from Crypto import Random
+from Crypto.Cipher import AES
 
 T = TypeVar('T')
 
@@ -66,3 +71,52 @@ class BytesFifoQueue(object):
         Appends data to the buffer.
         """
         self._buffer.write(data)
+
+
+_rand_gen = Random.new()
+
+
+def generate_aes_key(bits: int) -> bytes:
+    if bits not in [128, 192, 256]:
+        raise ValueError('Only keys with 128, 192 or 256 bits are supported')
+    return _rand_gen.read(bits//8)
+
+
+def aes_encrypt(message: bytes, key: bytes) -> bytes:
+    checksum = hashlib.md5(message).digest()
+    original_message = message
+    message = checksum + struct.pack('>I', len(original_message)) + original_message
+
+    # add empty spaces to round up to AES.block_size
+    empty_bytes = AES.block_size - (len(message) % AES.block_size)
+    if empty_bytes == AES.block_size:
+        empty_bytes = 0
+    for i in range(empty_bytes):
+        message += b'\0'
+
+    key = key[0:32]  # 256-bit key
+    cbc_iv = Random.new().read(AES.block_size)
+
+    encryptor = AES.new(key, AES.MODE_CBC, cbc_iv)
+    cyphertext = encryptor.encrypt(message)
+
+    output = cbc_iv + cyphertext
+    return output
+
+
+def aes_decrypt(to_decrypt: bytes, key: bytes) -> bytes:
+    cbc_iv = to_decrypt[:AES.block_size]
+    cyphertext = to_decrypt[AES.block_size:]
+
+    decryptor = AES.new(key, AES.MODE_CBC, cbc_iv)
+    message = decryptor.decrypt(cyphertext)
+    expected_checksum = message[:16]
+    message_length = struct.unpack(">I", message[16:20])[0]
+    original_message = message[20:20+message_length]
+
+    checksum = hashlib.md5(original_message).digest()
+    if expected_checksum != checksum:
+        # Incorrect key
+        raise ValueError('The message was encrypted with a different key - the checksum failed')
+    else:
+        return original_message
