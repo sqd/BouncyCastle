@@ -40,12 +40,25 @@ class TrafficManager:
     def send(self, pub_key: RsaKey, msg: BouncyMessage):
         """
         Sends the provided BouncyMessage to the node in the network identified by the given public
-        key. This is a non-blocking call.
+        key. This is a non-blocking call. It's also possible to send a message to the node itself.
         """
         node = self._trust_table_manager.get_node_by_pubkey(pub_key)
         if node is None:
             raise NodeNotFoundError('A node with the provided public key does not exist in the '
                                     'trust table')
+
+    def on_new_message(msg: BouncyMessage, sender_key: RsaKey):
+        if isinstance(msg, bfcp_pb2.ConnectionResponse):
+            conn_manager.on_conn_response(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.ChannelResponse):
+            conn_manager.on_channel_response(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.ToOriginalSender):
+            conn_manager.on_payload_received(msg)
+        # we're helping out other people below this line
+        elif isinstance(msg, bfcp_pb2.ToTargetServer):
+            pass
+        elif isinstance(msg, bfcp_pb2.ToTargetServer):
+            pass
 
     def run(self):
         """
@@ -53,11 +66,3 @@ class TrafficManager:
         this function never returns.
         """
         raise NotImplementedError()
-
-def handle_message(msg, sender_key, traffic_manager):
-    if isinstance(msg, bfcp_pb2.ConnectionResponse):
-        conn_manager.on_conn_response(msg, sender_key)
-    elif isinstance(msg, bfcp_pb2.ChannelResponse):
-        conn_manager.on_channel_response(msg, sender_key)
-    elif isinstance(msg, bfcp_pb2.ToOriginalSender):
-        conn_manager.on_payload_received(msg)
