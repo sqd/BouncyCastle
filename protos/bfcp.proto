@@ -189,6 +189,7 @@ message ToTargetServer {
    bytes payload = 1;
    ChannelID channel_id = 2;
    bytes original_sender_signature = 3;
+   int64 index = 4;
 }
 
 // ToOriginalSender sends a message from Target Server (TS) to Start Node (SN). This message follows
@@ -197,6 +198,7 @@ message ToOriginalSender {
    bytes payload = 1;
    ChannelID channel_id = 2;
    bytes end_node_signature = 3;
+   int64 index = 4;
 }
 
 // A CloseConnectionRequest is sent through the channel to notify that start node (SN) want to
