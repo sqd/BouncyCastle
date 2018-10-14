@@ -3,7 +3,7 @@ import hashlib
 import io
 import struct
 from asyncio import StreamWriter, StreamReader
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Optional
 
 from Crypto import Random
 from Crypto.Cipher import AES
@@ -124,20 +124,27 @@ def aes_decrypt(to_decrypt: bytes, key: bytes) -> bytes:
         return original_message
 
 
-async def send_proto_msg(writer: StreamWriter, msg: Message):
+async def send_proto_msg(writer: StreamWriter, msg: Message, aes_key: Optional[bytes]=None):
     serialized = msg.SerializeToString()
+    if aes_key is not None:
+        serialized = aes_encrypt(serialized, aes_key)
+
     writer.write(len(serialized).to_bytes(4, 'big'))
     await writer.drain()
     writer.write(serialized)
     await writer.drain()
 
 
-async def recv_proto_msg(reader: StreamReader, to_merge: Message, max_message_lenght=None):
+async def recv_proto_msg(reader: StreamReader, to_merge: Message, max_message_length=None,
+                         aes_key: Optional[bytes]=None):
     length_bytes = await reader.readexactly(4)
     length = int.from_bytes(length_bytes, 'big')
 
-    if max_message_lenght is not None and length > max_message_lenght:
+    if max_message_length is not None and length > max_message_length:
         raise ValueError('Received message is too large')
 
     message_bytes = await reader.readexactly(length)
+
+    if aes_key is not None:
+        message_bytes = aes_decrypt(message_bytes, aes_key)
     to_merge.ParseFromString(message_bytes)

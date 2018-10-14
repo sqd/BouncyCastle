@@ -51,12 +51,12 @@ class BfcpSocketHandler:
         await self._handshake_task
 
         msg = BouncyMessage()
-        await recv_proto_msg(self._reader, msg, MAX_MESSAGE_LENGTH)
+        await recv_proto_msg(self._reader, msg, MAX_MESSAGE_LENGTH, self._handshake.session_key)
         return msg
 
     async def send_bouncy_message(self, msg: BouncyMessage):
         await self._handshake_task
-        await send_proto_msg(self._writer, msg)
+        await send_proto_msg(self._writer, msg, self._handshake.session_key)
 
     def get_peer_key(self):
         return self._handshake.peer_pub_key
