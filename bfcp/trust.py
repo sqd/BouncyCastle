@@ -1,5 +1,5 @@
 """
-TODO(han): just a stub.
+TrustTableManager
 """
 from Crypto.PublicKey.RSA import RsaKey
 
@@ -7,7 +7,7 @@ from protos.bfcp_pb2 import NodeTable, NodeTableEntry, EndNodeRequirement
 
 
 class TrustTableManager:
-    def __init__(self):
+    def __init__(self, bfc_node: 'BFCNode'):
         """ Should contain self.node_table property """
         self.node_table = None # TODO
         raise NotImplementedError()
@@ -18,7 +18,7 @@ class TrustTableManager:
         """
         return self.node_table
 
-    async def update_table(self):
+    def update_table(self):
         raise NotImplementedError()
 
     def get_node_by_pubkey(self, pubkey: RsaKey) -> NodeTableEntry:
@@ -34,6 +34,13 @@ class TrustTableManager:
                 return node_table_entry
         return None
 
-    def get_pubkey_by_node_requirement(self, en_requirement: EndNodeRequirement) -> RsaKey:
+    def get_node_with_requirement(self, en_requirement: EndNodeRequirement) -> RsaKey:
         """ Returns a node public key, given EndNodeRequirement like location must be in China """
+        raise NotImplementedError()
+
+    def get_random_node(self) -> bytes:
+        """
+        Get a random node for sending stuffs.
+        :return: the public key of a random node.
+        """
         raise NotImplementedError()

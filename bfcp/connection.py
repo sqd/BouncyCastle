@@ -1,12 +1,14 @@
 import threading
-from typing import Callable, List, Tuple, Optional, Dict, Union
+from typing import Callable, List, Tuple, Dict, Union, Optional
 from enum import Enum, auto
-import protos.bfcp_pb2 as bfcp_pb2
 from random import randint
 from uuid import uuid4
+from asyncio import ensure_future
+
+import protos.bfcp_pb2 as bfcp_pb2
+
 from bfcp.messages import TrafficManager, NodeNotFoundError
 from bfcp.trust import TrustTableManager
-
 import utils
 
 
@@ -27,6 +29,7 @@ class ConnectionManager:
         self._relay_channels: Dict[str, Tuple[bytes, bytes]] = dict()
 
         self._traffic_manager: TrafficManager = bfc_node.traffic_manager
+        self._trust_table: TrustTableManager = bfc_node.trust_table_manager
 
     def check_conn_type(self, conn_uuid: str) -> ConnectionType:
         """
@@ -42,36 +45,36 @@ class ConnectionManager:
             return ConnectionType.neither
 
     def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'Connection':
-        conn = Connection(self._traffic_manager)
+        conn = Connection(self, self._traffic_manager)
         conn.initiate_connection(en_requirement, addr)
         self._os_conn[conn.uuid] = conn
         return conn
 
     def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: bytes) -> None:
         if self.check_conn_type(msg.connection_params.uuid) == ConnectionType.neither:
-            # TODO choose node logic here
-            self._relay_conn_requests[msg.conn_uuid] = (sender_key, next_node.pub_key)
-            self._traffic_manager.send(choose_a_node.pub_key, msg)
+            next_node_pub_key = self._trust_table.get_random_node()
+            self._relay_conn_requests[msg.conn_uuid] = (sender_key, next_node_pub_key)
+            self._sync_send(msg, next_node_pub_key)
 
     def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: bytes):
         receiver_type = self.check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.uuid].on_end_node_found(msg.selected_end_node)
         elif receiver_type == ConnectionType.relay:
-            self._traffic_manager.send(self._relay_conn_requests[msg.uuid][0], msg)
+            self._sync_send(msg, self._relay_conn_requests[msg.uuid][0])
 
     def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key):
         if self.check_conn_type(msg.channel_uuid) == ConnectionType.neither:
-            # TODO choose a node
-            self._relay_channels[msg.channel_uuid] = (sender_key, choose_a_node.pub_key)
-            self._traffic_manager.send(choose_a_node.pub_key, msg)
+            next_node_pub_key = self._trust_table.get_random_node()
+            self._relay_channels[msg.channel_uuid] = (sender_key, next_node_pub_key)
+            self._sync_send(msg, next_node_pub_key)
 
     def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
         elif receiver_type == ConnectionType.relay:
-            self._traffic_manager.send(self._relay_channels[msg.channel_id][0], msg)
+            self._sync_send(msg, self._relay_channels[msg.channel_id][0])
 
     def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer]):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
@@ -79,7 +82,10 @@ class ConnectionManager:
             self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg)
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
-            self._traffic_manager.send(self._relay_channels[msg.channel_id][dir_idx], msg)
+            self._sync_send(msg, self._relay_channels[msg.channel_id][dir_idx])
+
+    def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
+        ensure_future(self._traffic_manager.send(pub_key, msg))
 
 
 class Connection:
@@ -134,7 +140,7 @@ class Connection:
         conn_request.target_server_port = ts_address[1]
         # TODO conn_request.sender_connection_signing_key = sender_connection_signing_key
 
-        self._traffic_manager.send(choose_a_node, conn_request) # TODO choose a node
+        self._sync_send(conn_request)
 
     def on_end_node_found(self, en):
         # Found an EN, now try to establish channels
@@ -147,7 +153,7 @@ class Connection:
             channel_request.channel_uuid = channel_uuid
             # TODO channel_request.original_sender_signature = raise NotImplementedError()
 
-            self._traffic_manager.send(choose_a_node.pub_key, channel_request) # TODO choose a node
+            self._sync_send(channel_request)
 
     def on_channel_established(self, channel_uuid: str, next_hop_pub_key: bytes):
         self._channels.append((channel_uuid, next_hop_pub_key))
@@ -184,7 +190,7 @@ class Connection:
             payload_message.channel_id = channel_id
             payload_message.index = self._next_send_index
             # TODO payload_message.original_sender_signature
-            self._traffic_manager.send(next_hop_pub_key, payload_message)
+            self._sync_send(payload_message, next_hop_pub_key)
         self._next_send_index += 1
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
@@ -258,6 +264,9 @@ class Connection:
         """
         self._on_closed.remove(callback)
 
+    def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
+        ensure_future(self._traffic_manager.send(pub_key, msg))
+
 
 def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_manager: TrafficManager):
     """
@@ -271,7 +280,7 @@ def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_
             # send to bouncy node that is well-suited to become EN 
             # if we want to access contents from China, EN should be in China
             trust_table_manager = TrustTableManager()
-            pub_key = trust_table_manager.get_pubkey_by_node_requirement(conn_request.end_node_requirement)
+            pub_key = trust_table_manager.get_node_with_requirement(conn_request.end_node_requirement)
             traffic_manager.send(pub_key, conn_request)
         else:
             # bounce to any random bouncy node
