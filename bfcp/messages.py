@@ -15,11 +15,9 @@ from protos.bfcp_pb2 import BouncyMessage
 from logger import getLogger
 from utils import recv_proto_msg, send_proto_msg
 
+from config import *
+
 _log = getLogger(__name__)
-
-
-MAX_MESSAGE_LENGTH = 64 * 2**10  # 64 KiB
-READ_CHUNK_SIZE = 4096
 
 
 class NodeNotFoundError(Exception):

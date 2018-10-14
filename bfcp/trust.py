@@ -10,8 +10,10 @@ from Crypto.PublicKey.RSA import RsaKey
 from randomdict import RandomDict
 
 import protos.bfcp_pb2 as bfcp_pb2
+from bfcp.handshake import proto_to_pubkey, pubkey_to_deterministic_string, get_node_pub_key
 
 from bfcp.messages import TrafficManager
+from bfcp.node import BFCNode
 
 
 class TrustTableManagerTask:
@@ -42,8 +44,9 @@ class UpdateNodeTableTask(TrustTableManagerTask):
 
 
 """
-Statuc functions for bfcp_pb2.Node struct
+Status functions for bfcp_pb2.NodeTableEntry struct
 """
+
 
 def to_node_table_entry(node: bfcp_pb2.Node) -> bfcp_pb2.NodeTableEntry:
     """ Constructs and returns NodeTableEntry, given a Node """
@@ -53,11 +56,13 @@ def to_node_table_entry(node: bfcp_pb2.Node) -> bfcp_pb2.NodeTableEntry:
     node_table_entry.trust_score = 1.0
     return node_table_entry
 
+
 def from_node_table_entry(entry: bfcp_pb2.NodeTableEntry) -> bfcp_pb2.Node:
     """ Returns NodeTableEntry's Node property """
     return entry.node
 
-def new_trust_score(node: bfcp_pb2.Node, src_trust_score: float, new_trust_score: float) -> float:
+
+def new_trust_score(node: bfcp_pb2.NodeTableEntry, src_trust_score: float, new_trust_score: float) -> float:
     """
     Compute node's trust score from scratch.
     :param src_trust_score: the trust score of a node S.
@@ -69,7 +74,8 @@ def new_trust_score(node: bfcp_pb2.Node, src_trust_score: float, new_trust_score
     node.trust_score = src_trust_score*new_trust_score
     return node.trust_score
 
-def update_trust_score(node: bfcp_pb2.Node, src_trust_score: float, new_trust_score: float) -> float:
+
+def update_trust_score(node: bfcp_pb2.NodeTableEntry, src_trust_score: float, new_trust_score: float) -> float:
     """
     Update node's trust score.
     :param src_trust_score: the trust score of a node S.
@@ -82,11 +88,12 @@ def update_trust_score(node: bfcp_pb2.Node, src_trust_score: float, new_trust_sc
     node.trust_score = node.avg_sum/node.avg_n
     return node.trust_score
 
+
 class TrustTableManager:
-    def __init__(self, bfc_node: 'BFCNode'):
-        self._nodes: Dict[RsaKey, Node] = RandomDict()
+    def __init__(self, initial_node_table: bfcp_pb2.NodeTable, traffic_manager: TrafficManager):
+        self._nodes = self._parse_initial_node_table(initial_node_table)
         self._task_queue = Queue()
-        self._traffic_manager: TrafficManager = bfc_node.traffic_manager
+        self._traffic_manager = traffic_manager
         self._thread = Thread(target=self._loop())
 
         self._last_update_timestamp = 0
@@ -109,29 +116,30 @@ class TrustTableManager:
         self._traffic_manager.send(node_table_msg, recipient)
 
     def merge_node_table(self, src: RsaKey, table: bfcp_pb2.NodeTable):
-        if src not in self._wait_update_nodes:
+        src_key = pubkey_to_deterministic_string(src)
+        if src_key not in self._wait_update_nodes:
             # probably an error/malicious
             return
         self._wait_update_nodes.remove(src)
         for entry in table.entries:
-            node = Node.from_node_table_entry(entry)
-            if node.pub_key in self._nodes:
-                self._nodes[node.pub_key].update_trust_score(self._nodes[src].trust_score, node.trust_score)
+            node_key = pubkey_to_deterministic_string(get_node_pub_key(entry))
+            if node_key in self._nodes:
+                update_trust_score(self._nodes[node_key], self._nodes[src_key].trust_score, entry.trust_score)
             else:
-                self._nodes[node.pub_key] = node
-                self._nodes[node.pub_key].new_trust_score(self._nodes[src].trust_score, node.trust_score)
+                self._nodes[node_key] = entry
+                self._nodes[node_key].new_trust_score(self._nodes[src].trust_score, entry.trust_score)
 
-    def get_node_by_pubkey(self, pub_key: RsaKey) -> Optional[Node]:
+    def get_node_by_pubkey(self, pub_key: RsaKey) -> Optional[bfcp_pb2.NodeTableEntry]:
         """
-        Returns a Node with the pub key, else return None
+        Returns a NodeTableEntry with the pub key, else return None
         """
         return self._nodes.get(pub_key, None)
 
     def get_node_with_requirement(self, en_requirement: bfcp_pb2.EndNodeRequirement) -> RsaKey:
-        """ Returns a node public key, given EndNodeRequirement like location must be in China"""
+        """Returns a node public key, given EndNodeRequirement like location must be in China"""
         raise NotImplementedError()
 
-    def get_random_node(self) -> Node:
+    def get_random_node(self) -> bfcp_pb2.NodeTableEntry:
         """
         Get a random node for sending stuffs.
         :raises ValueError if there is no node.
@@ -139,7 +147,6 @@ class TrustTableManager:
         """
         if len(self._nodes) == 0:
             raise ValueError("No node in the trust table.")
-        # TODO there may be a better solution
         return self._nodes.random_value()
 
     def add_task(self, task: TrustTableManagerTask):
@@ -157,3 +164,12 @@ class TrustTableManager:
             task.run(self)
             if time() - self._last_update_timestamp >= 10:  # TODO config
                 self.add_task(UpdateNodeTableTask())
+
+    @staticmethod
+    def _parse_initial_node_table(initial_node_table: bfcp_pb2.NodeTable)\
+            -> RandomDict[RsaKey, bfcp_pb2.NodeTableEntry]:
+        result = RandomDict()
+        for entry in initial_node_table.entries:
+            pub_key = proto_to_pubkey(entry.node.public_key)
+            result[pubkey_to_deterministic_string(pub_key)] = entry
+        return result

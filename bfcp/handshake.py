@@ -6,10 +6,11 @@ from Crypto.PublicKey.RSA import RsaKey
 from Crypto.Random import get_random_bytes
 from google.protobuf.message import Message
 
-from protos.bfcp_pb2 import RsaChallenge, RsaChallengeResponse, RsaPubKey, PeerHello, AESKey
+from protos.bfcp_pb2 import RsaChallenge, RsaChallengeResponse, RsaPubKey, PeerHello, AESKey, \
+    NodeTableEntry
 from utils import generate_aes_key, send_proto_msg, recv_proto_msg
 
-CHALLENGE_SIZE = 64
+from config import *
 
 
 def make_rsa_challenge(challenged_pub_key: RsaKey) -> Tuple[bytes, RsaChallenge]:
@@ -66,6 +67,10 @@ def proto_to_pubkey(key: RsaPubKey) -> RsaKey:
     n = int.from_bytes(key.modulus, 'big')
     e = int.from_bytes(key.pub_exponent, 'big')
     return RsaKey(n=n, e=e)
+
+
+def get_node_pub_key(n: NodeTableEntry) -> RsaKey:
+    return proto_to_pubkey(n.node.public_key)
 
 
 PEER_CONNECTION_KEY_SIZE = 256
