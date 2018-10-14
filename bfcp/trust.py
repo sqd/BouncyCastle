@@ -1,7 +1,7 @@
 """
 TrustTableManager
 """
-from typing import Tuple
+from typing import Tuple, Dict
 
 from Crypto.PublicKey.RSA import RsaKey
 
@@ -12,7 +12,7 @@ class Node:
     """
     A node. Corresponds to proto NodeTableEntry.
     """
-    def __init__(self, pub_key: bytes, last_addr: [str, int], trust_score: float):
+    def __init__(self, pub_key: RsaKey, last_addr: Tuple[str, int], trust_score: float):
         self.pub_key = pub_key
         self.last_addr = last_addr
         self.trust_score = trust_score
@@ -21,21 +21,21 @@ class Node:
         raise NotImplementedError()
 
     @classmethod
-    def fromNodeTableEntry(cls):
-        pass
+    def fromNodeTableEntry(cls, entry: NodeTableEntry):
+        # TODO rsa key deserialization
+        return Node(entry.node.public_key, (entry.node.last_known_address, entry.node.last_port), entry.trust_score)
 
 
 class TrustTableManager:
-    def __init__(self, bfc_node: 'BFCNode'):
-        """ Should contain self.node_table property """
-        self.node_table = None # TODO
+    def __init__(self):
+        self._nodes: Dict[RsaKey, Node] = dict()
         raise NotImplementedError()
 
     def get_node_table(self) -> NodeTable:
         """
         Gets the node table of this node in the bfcp
         """
-        return self.node_table
+        raise NotImplementedError()
 
     def update_table(self):
         raise NotImplementedError()
