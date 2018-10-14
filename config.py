@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List, Tuple
-from protos.bfcp_pb2 import NodeTable, EndNodeRequirement
+from protos.bfcp_pb2 import BouncyMessage
 from google.protobuf import text_format
 
 
@@ -33,27 +33,28 @@ class HTTPProxyServerConfig:
         self.listen_address = listen_address
         """A list of tuple (address:str, port:int) specifying the locations the server should listen on."""
 
-class NodeTableIO:
+class ProtoIO:
     """
-    Helper class that reads/writes NodeTable object into file
+    Helper class that reads/writes proto object into file
     """
 
-    def read_from_file(self, file_dir: str) -> NodeTable:
+    def read_from_file(self, file_path: str, proto_type: BouncyMessage) -> BouncyMessage:
         """
         :param file_dir: directory of file to be read
         :return: NodeTable from reading a file
+        usage: <protoio>.read_from_file(<file-path>, NodeTable())
         """
-        text_proto = open(file_dir, 'r')
-        node_table = text_format.Parse(text_proto, NodeTable())
-        return node_table
+        text_proto = open(file_path, 'r')
+        proto_object = text_format.Parse(text_proto, proto_type)
+        return proto_object
 
-    def write_to_file(self, file_dir: str, node_table: NodeTable) -> None:
+    def write_to_file(self, file_path: str, proto_object: BouncyMessage) -> None:
         """
         Writes NodeTable object into file
         :param file_dir: directory of file to be written
         """
-        text_proto = text_format.MessageToString(node_table)
-        file = open(file_dir, 'w')
+        text_proto = text_format.MessageToString(proto_object)
+        file = open(file_path, 'w')
         file.write(text_proto)
         file.close()
 
