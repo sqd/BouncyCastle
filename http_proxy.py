@@ -66,7 +66,7 @@ class _Worker(EventConsumer):
         self._client_send_buf += s
         try:
             while self._client_send_buf and self._client_writable:
-                byte_sent = self._client_socket.send(, self._client_send_buf
+                byte_sent = self._client_socket.send(self._client_send_buf)
                 total_byte_sent += byte_sent
                 self._client_send_buf = self._client_send_buf[byte_sent:]
         except socket.error as e:
