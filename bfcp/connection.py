@@ -162,7 +162,7 @@ class ConnectionManager:
                                     conn_request.channel_uuid,
                                     prev_hops)
         self._en_conn[conn_request.routing_params.uuid] = (en_conn, prev_hops)
-        en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port))
+        await en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port))
 
         await self._traffic_manager.send(conn_resp)
 
@@ -173,26 +173,30 @@ class EndNodeConnection:
         self._conn_uuid = conn_uuid
         self._channel_uuid = channel_uuid
         self._prev_hops = prev_hops
-        self._reader = None
-        self._writer = None
+        self._reader_writer_future = None
 
-    def initiate_connection(self, addr: Tuple[str, int]):
-        self._reader, self._writer = ensure_future(open_connection(*addr))
+    async def initiate_connection(self, addr: Tuple[str, int]):
+        self._reader_writer_future = ensure_future(open_connection(*addr))
 
-    def on_recv(self, data: bytes):
+        reader, _ = await self._reader_writer_future
+        while True:
+            data = await reader.read()
+            if not data:
+                break
+            ensure_future(self.on_recv(data))
+
+    async def on_recv(self, data: bytes):
         # Send the data back to the OS
         msg = bfcp_pb2.ToOriginalSender()
         msg.channel_id.connection_uuid = self._conn_uuid
+        msg.payload = data
         for (uuid, key) in self._prev_hops:
             msg.channel_id.channel_uuid = uuid
-            self._traffic_manager.send(msg, key)
+            ensure_future(self._traffic_manager.send(msg, key))
 
-    def send(self, data: bytes):
-        # TODO Mike help
-        await self._writer
-        self._writer.write(data)
-
-    # TODO Mike help how to I listen for data on self._reader
+    async def send(self, data: bytes):
+        _, writer = await self._reader_writer_future
+        writer.write(data)
 
 
 class OriginalSenderConnection:
