@@ -2,21 +2,23 @@
 This module builds a layer of abstraction for sending and receiving information in the form of
 BouncyMessages instead of raw TCP traffic.
 """
+import asyncio
 import asyncore
 import socket
 import threading
-from typing import Callable, Optional
+from asyncio import StreamReader, StreamWriter
+from typing import Callable, Optional, Dict, Union, Tuple, List
 
 from Crypto.PublicKey.RSA import RsaKey
 from google.protobuf.message import Message
 
-from bfcp.handshake import pubkey_to_proto, PeerHandshake
+from bfcp.handshake import pubkey_to_proto, PeerHandshake, pubkey_to_deterministic_string
 from bfcp.trust import TrustTableManager
 from protos import bfcp_pb2
 from protos.bfcp_pb2 import BouncyMessage, ConnectionResponse
 
 from logger import getLogger
-from utils import BytesFifoQueue
+from utils import BytesFifoQueue, recv_proto_msg, send_proto_msg
 
 _log = getLogger(__name__)
 
@@ -29,91 +31,40 @@ class NodeNotFoundError(Exception):
     pass
 
 
-class ProtocolError(Exception):
-    pass
-
-
-class BfcpSocketHandler(asyncore.dispatcher_with_send):
-    def __init__(self, sock: socket.socket, own_rsa_key: RsaKey, traffic_manager: TrafficManager,
-                 own_serving_port: Optional[int]):
-        asyncore.dispatcher_with_send.__init__(self, sock)
-
+class BfcpSocketHandler:
+    def __init__(self, reader: StreamReader, writer: StreamWriter, own_rsa_key: RsaKey,
+                 traffic_manager: 'TrafficManager', own_serving_port: Optional[int]):
+        self._writer = writer
+        self._reader = reader
         self._own_serving_port = own_serving_port
         self._own_rsa_key = own_rsa_key
         self._traffic_manager = traffic_manager
 
-        self._message_reading_state = 'waiting'  # one of: 'waiting', 'recv_len', 'recv_bytes'
-        self._next_message_len: int = 0
-        self._received_bytes = BytesFifoQueue()
-        self._received_bytes_lock = threading.RLock()
+        self._handshake_task = None
+        self._handshake = PeerHandshake(reader, writer, own_rsa_key, own_serving_port)
 
-        self._handshake_state: Optional[PeerHandshake] = None
+    async def establish(self):
+        self._handshake_task = asyncio.ensure_future(self._handshake.execute())
+        await self._handshake_task
 
-    def handle_close(self):
-        self._traffic_manager.notify_socket_closed(self)
+    async def wait_till_established(self):
+        if self._handshake_task is None:
+            raise ValueError('wait_till_established() can only be called after establish()')
+        await self._handshake_task
 
-    def send_message(self, proto_message: Message):
-        msg = proto_message.SerializeToString()
-        self.send(len(msg).to_bytes(4, 'big'))
-        self.send(msg.encode())
+    async def next_message(self) -> BouncyMessage:
+        await self._handshake_task
 
-    def handle_connect(self):
-        self._handshake_state = PeerHandshake(self._own_rsa_key, self._own_serving_port,
-                                              lambda msg: self.send_message(msg))
+        msg = BouncyMessage()
+        await recv_proto_msg(self._reader, msg, MAX_MESSAGE_LENGTH)
+        return msg
 
-    def handle_read(self):
-        data = self.recv(READ_CHUNK_SIZE)
-        if data:
-            with self._received_bytes_lock:
-                self._received_bytes.write(data)
-                self._process_received_bytes()
+    async def send_bouncy_message(self, msg: BouncyMessage):
+        await self._handshake_task
+        await send_proto_msg(self._writer, msg)
 
-    def _handle_message(self, message_bytes: bytes):
-        if self._handshake_state.complete:
-            msg = BouncyMessage()
-            msg.ParseFromString(message_bytes)
-            self._traffic_manager.on_new_message(msg, self._handshake_state.peer_pub_key)
-        else:
-            self._handshake_state.handle_message(message_bytes)
-
-    def _process_received_bytes(self):
-        previous_state = ''
-        while previous_state != self._message_reading_state:
-            with self._received_bytes_lock:
-                if self._message_reading_state == 'waiting':
-                    if self._received_bytes.available() != 0:
-                        self._message_reading_state = 'recv_len'
-                elif self._message_reading_state == 'recv_len':
-                    if self._received_bytes.available() >= 4:
-                        self._next_message_len = int.from_bytes(self._received_bytes.read(4), 'big')
-                        if self._next_message_len > MAX_MESSAGE_LENGTH:
-                            self._terminate(ProtocolError('Received message is too large'))
-                        self._message_reading_state = 'recv_bytes'
-                elif self._message_reading_state == 'recv_bytes':
-                    if self._received_bytes.available() >= self._next_message_len:
-                        self._handle_message(self._received_bytes.read(self._next_message_len))
-                        self._message_reading_state = 'waiting'
-
-    def _terminate(self, reason_error):
-        raise NotImplementedError()
-
-
-class IncomingTrafficListener(asyncore.dispatcher):
-    def __init__(self, host, port, traffic_manager: TrafficManager):
-        asyncore.dispatcher.__init__(self)
-        self._traffic_manager = traffic_manager
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.set_reuse_addr()
-        self.bind((host, port))
-        self.listen(5)
-
-    def handle_accept(self):
-        pair = self.accept()
-        if pair is not None:
-            sock, addr = pair
-            _log.info('Incoming connection from %s' % repr(addr))
-            handler = BfcpSocketHandler(sock, self._traffic_manager)
-            self._traffic_manager.add()
+    def get_peer_key(self):
+        return self._handshake.peer_pub_key
 
 
 class TrafficManager:
@@ -132,46 +83,97 @@ class TrafficManager:
     TrafficManager.run()  # never returns
     """
 
-    def __init__(self, trust_table_manager: TrustTableManager,
-                 on_new_message: Callable[[BouncyMessage, RsaKey, TrafficManager], None],
+    def __init__(self, trust_table_manager: TrustTableManager, own_rsa_key: RsaKey,
+                 loop: asyncio.AbstractEventLoop, serving_host: Optional[Tuple[str, int]]=None,
                  max_clients=60, max_servers=60):
-        self._on_new_message = on_new_message
+        self._async_loop = loop
+        self._serving_host = serving_host
+        self._own_rsa_key = own_rsa_key
         self._max_clients = max_clients
         self._max_servers = max_servers
         self._trust_table_manager = trust_table_manager
+        self._next_message_futures = set()
 
-        self._open_client_sockets = {}
-        self._open_server_sockets = {}
+        # This will be used so that new_messages() can block if there are no sockets to listen to
+        # TODO: modify this accordingly when sockets are removed
+        self._sockets_available_future = self._async_loop.create_future()
 
-    def send(self, pub_key: RsaKey, msg: BouncyMessage) -> None:
+        self._open_client_sockets: Dict[bytes, BfcpSocketHandler] = {}
+        self._open_server_sockets: Dict[bytes, BfcpSocketHandler] = {}
+
+        if self._serving_host is not None:
+            self._server = self._async_loop.run_until_complete(
+                asyncio.start_server(
+                    lambda reader, writer: self._on_new_server_socket(reader, writer),
+                    self._serving_host[0], self._serving_host[1], loop=self._async_loop)
+            )
+
+    async def send(self, pub_key: RsaKey, msg: BouncyMessage) -> None:
         """
         Sends the provided BouncyMessage to the node in the network identified by the given public
-        key. This is a non-blocking call. It's also possible to send a message to the node itself.
+        key. It's also possible to send a message to the node itself.
         """
-        node = self._trust_table_manager.get_node_by_pubkey(pub_key)
-        if node is None:
-            raise NodeNotFoundError('A node with the provided public key does not exist in the '
-                                    'trust table')
+        pub_key_index = pubkey_to_deterministic_string(pub_key)
+        if pub_key_index in self._open_client_sockets:
+            await self._open_client_sockets[pub_key_index].send_bouncy_message(msg)
+        elif pub_key_index in self._open_server_sockets:
+            await self._open_server_sockets[pub_key_index].send_bouncy_message(msg)
+        else:
+            # We need to form a new connection
+            node = self._trust_table_manager.get_node_by_pubkey(pub_key)
+            if node is None:
+                raise NodeNotFoundError('A node with the provided public key does not exist in the '
+                                        'trust table')
 
-    def on_new_message(self, msg: BouncyMessage, sender_key: RsaKey):
-        if isinstance(msg, bfcp_pb2.ConnectionResponse):
-            conn_manager.on_conn_response(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.ChannelResponse):
-            conn_manager.on_channel_response(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.ToOriginalSender):
-            conn_manager.on_payload_received(msg)
-        # we're helping out other people below this line
-        elif isinstance(msg, bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer):
-            conn_manager.on_payload_received(msg)
+            reader, writer = await asyncio.open_connection(
+                node.node.last_known_address, node.node.last_port, loop=self._async_loop)
+            handler = await self._open_new_socket_handler(reader, writer)
+            self._register_client_socket_handler(handler)
+            self._open_client_sockets[pub_key_index] = handler
+            await handler.send_bouncy_message(msg)
 
-    def handle_message_bytes(self, data: bytes) -> None:
-        new_message = BouncyMessage()
-        new_message.ParseFromString(data.decode())
-        self._on_new_message(new_message, )
+    @staticmethod
+    async def _wrap_future_with_socket_handler(future, socket_handler):
+        return await future, socket_handler
 
-    def run(self):
-        """
-        Starts the async loop for routing traffic between nodes in the Bouncy Network. Note that
-        this function never returns.
-        """
-        raise NotImplementedError()
+    def _add_future_for_next_message_from(self, socket_handler: BfcpSocketHandler):
+        self._next_message_futures.add(
+            self._wrap_future_with_socket_handler(socket_handler.next_message(), socket_handler)
+        )
+
+    async def new_messages(self) -> List[Tuple[RsaKey, BouncyMessage]]:
+        if self._next_message_futures == []:
+            await self._sockets_available_future
+
+        done, self._next_message_futures = await asyncio.wait(
+            self._next_message_futures, loop=self._async_loop, return_when=asyncio.FIRST_COMPLETED)
+
+        msgs = []
+        for f in done:
+            msg, socket_handler = await f
+            msgs.append((socket_handler.get_peer_key(), msg))
+            self._add_future_for_next_message_from(socket_handler)
+        return msgs
+
+    def _register_server_socket_handler(self, socket_handler: BfcpSocketHandler):
+        pub_key_index = pubkey_to_deterministic_string(socket_handler.get_peer_key())
+        self._open_server_sockets[pub_key_index] = socket_handler
+
+    def _register_client_socket_handler(self, socket_handler: BfcpSocketHandler):
+        pub_key_index = pubkey_to_deterministic_string(socket_handler.get_peer_key())
+        self._open_client_sockets[pub_key_index] = socket_handler
+
+    async def _open_new_socket_handler(self, reader, writer) -> BfcpSocketHandler:
+        serving_port = None if self._serving_host is None else self._serving_host[1]
+        socket_handler = BfcpSocketHandler(reader, writer, self._own_rsa_key, self, serving_port)
+        await socket_handler.establish()
+        self._add_future_for_next_message_from(socket_handler)
+
+        if not self._sockets_available_future.done():
+            self._sockets_available_future.set_result(True)
+
+        return socket_handler
+
+    async def _on_new_server_socket(self, reader, writer):
+        handler = await self._open_new_socket_handler(reader, writer)
+        self._register_server_socket_handler(handler)

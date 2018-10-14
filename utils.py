@@ -2,10 +2,12 @@
 import hashlib
 import io
 import struct
+from asyncio import StreamWriter, StreamReader
 from typing import Generic, TypeVar
 
 from Crypto import Random
 from Crypto.Cipher import AES
+from google.protobuf.message import Message
 
 T = TypeVar('T')
 
@@ -120,3 +122,22 @@ def aes_decrypt(to_decrypt: bytes, key: bytes) -> bytes:
         raise ValueError('The message was encrypted with a different key - the checksum failed')
     else:
         return original_message
+
+
+async def send_proto_msg(writer: StreamWriter, msg: Message):
+    serialized = msg.SerializeToString()
+    writer.write(len(serialized).to_bytes(4, 'big'))
+    await writer.drain()
+    writer.write(serialized)
+    await writer.drain()
+
+
+async def recv_proto_msg(reader: StreamReader, to_merge: Message, max_message_lenght=None):
+    length_bytes = await reader.readexactly(4)
+    length = int.from_bytes(length_bytes, 'big')
+
+    if max_message_lenght is not None and length > max_message_lenght:
+        raise ValueError('Received message is too large')
+
+    message_bytes = await reader.readexactly(length)
+    to_merge.ParseFromString(message_bytes)
