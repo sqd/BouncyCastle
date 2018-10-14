@@ -1,4 +1,5 @@
 # -*- encoding: utf-8 -*-
+import asyncio
 from typing import Tuple
 
 import protos.bfcp_pb2 as bfcp_pb2
@@ -30,4 +31,25 @@ class BFCNode:
         """
         Spin up ths BFC node.
         """
-        self.traffic_manager.run()
+        async def main_loop():
+            while True:
+                new_messages = await self.traffic_manager.new_messages()
+                for msg, sender_key in new_messages:
+                    if isinstance(msg, bfcp_pb2.ConnectionResponse):
+                        self.connection_manager.on_conn_response(msg, sender_key)
+                    elif isinstance(msg, bfcp_pb2.ChannelResponse):
+                        self.connection_manager.on_channel_response(msg, sender_key)
+                    elif isinstance(msg, bfcp_pb2.ToOriginalSender):
+                        self.connection_manager.on_payload_received(msg)
+                    # we're helping out other people below this line
+                    elif isinstance(msg, bfcp_pb2.ToTargetServer):
+                        pass
+                    elif isinstance(msg, bfcp_pb2.ToTargetServer):
+                        pass
+
+        loop = asyncio.get_event_loop()
+        asyncio.ensure_future(main_loop())
+        try:
+            loop.run_forever()
+        finally:
+            loop.close()
