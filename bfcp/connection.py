@@ -34,6 +34,7 @@ SENDER_CONNECTION_KEY_BITS = 4096
 CHANNELS_PER_CONNECTION = 5
 MIN_CHANNEL_LENGTH = 5
 MAX_CHANNEL_LENGTH = 10
+MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT = MIN_CHANNEL_LENGTH * (2/3)
 
 
 class ConnectionType(Enum):
@@ -207,7 +208,7 @@ class OriginalSenderConnection:
         conn_request = bfcp_pb2.ConnectionRequest()
 
         conn_request.conn_params.uuid = self.uuid
-        conn_request.conn_params.remaining_hops = randint(10, 20)  # TODO config
+        conn_request.conn_params.remaining_hops = randint(MIN_CHANNEL_LENGTH, MAX_CHANNEL_LENGTH)
 
         conn_request.end_node_requirement.CopyFrom(en_requirement)
         conn_request.target_server_address = ts_address[0]
@@ -232,18 +233,16 @@ class OriginalSenderConnection:
         for i in range(CHANNELS_PER_CONNECTION):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
-
             channel_request.end_node.CopyFrom(conn_resp.selected_end_node)
             channel_request.channel_uuid = channel_uuid
             channel_request.routing_params.uuid = self.uuid
             channel_request.routing_params.remaining_hops = self._make_channel_length()
 
-            # TODO: To whom?
-            await self._traffic_manager.send(channel_request, WHOM)
+            await self._traffic_manager.send(channel_request)
 
     def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
         self._channels.append((channel_uuid, next_hop_pub_key))
-        if len(self._channels) >= 5:  # TODO config this
+        if len(self._channels) >= MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT:
             for callback in self._on_established:
                 # TODO how do we know what exceptions are raised when there's a failure?
                 callback(None)
