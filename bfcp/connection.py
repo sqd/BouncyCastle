@@ -6,6 +6,7 @@ from uuid import uuid4
 from asyncio import ensure_future
 
 import protos.bfcp_pb2 as bfcp_pb2
+from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.messages import TrafficManager, NodeNotFoundError
 from bfcp.trust import TrustTableManager
@@ -24,9 +25,9 @@ class ConnectionManager:
         self._os_conn: Dict[str, Connection] = dict()
 
         #: Connection requests that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
-        self._relay_conn_requests: Dict[str, Tuple[bytes, bytes]] = dict()
+        self._relay_conn_requests: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
         #: Channels that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
-        self._relay_channels: Dict[str, Tuple[bytes, bytes]] = dict()
+        self._relay_channels: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
 
         self._traffic_manager: TrafficManager = bfc_node.traffic_manager
         self._trust_table: TrustTableManager = bfc_node.trust_table_manager
@@ -50,7 +51,7 @@ class ConnectionManager:
         self._os_conn[conn.uuid] = conn
         return conn
 
-    def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: bytes) -> None:
+    def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: RsaKey) -> None:
         if self.check_conn_type(msg.connection_params.uuid) != ConnectionType.neither:
             # Probably an error/malicious attempt
             return
@@ -76,7 +77,7 @@ class ConnectionManager:
                 self._relay_conn_requests[msg.conn_uuid] = (sender_key, node.pub_key)
                 self._sync_send(msg, node.pub_key)
 
-    def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: bytes):
+    def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
         receiver_type = self.check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.uuid].on_end_node_found(msg.selected_end_node)
@@ -104,7 +105,7 @@ class ConnectionManager:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             self._sync_send(msg, self._relay_channels[msg.channel_id][dir_idx])
 
-    def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
+    def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[RsaKey] = None):
         ensure_future(self._traffic_manager.send(pub_key, msg))
 
 
@@ -129,7 +130,7 @@ class Connection:
         self._traffic_manager = traffic_manager
 
         #: A list of (channel uuid, next hop pub key)
-        self._channels: List[Tuple[str, bytes]] = []
+        self._channels: List[Tuple[str, RsaKey]] = []
 
         # Packet piecing stuffs
         self._next_recv_index = 0
@@ -149,7 +150,7 @@ class Connection:
         conn_params = bfcp_pb2.ConnectionRoutingParams()
         conn_params.uuid = str(uuid4())
         self.uuid = conn_params.uuid
-        conn_params.remaining_hops = randint(10,20) # TODO config
+        conn_params.remaining_hops = randint(10, 20)  # TODO config
 
         # TODO self.sender_connection_signing_key = self.generate_public_key()
 
@@ -175,7 +176,7 @@ class Connection:
 
             self._sync_send(channel_request)
 
-    def on_channel_established(self, channel_uuid: str, next_hop_pub_key: bytes):
+    def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
         self._channels.append((channel_uuid, next_hop_pub_key))
         if len(self._channels) >= 5:  # TODO config this
             for callback in self._on_established:
