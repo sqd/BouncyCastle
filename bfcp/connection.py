@@ -4,7 +4,7 @@ from typing import Callable, List, Tuple, Dict, Union, Optional, Set
 from enum import Enum, auto
 from random import randint
 from uuid import uuid4
-from asyncio import ensure_future, open_connection
+from asyncio import ensure_future, open_connection, gather
 
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.PublicKey import RSA
@@ -162,9 +162,12 @@ class ConnectionManager:
                                     conn_request.channel_uuid,
                                     prev_hops)
         self._en_conn[conn_request.routing_params.uuid] = (en_conn, prev_hops)
-        await en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port))
 
-        await self._traffic_manager.send(conn_resp)
+        gather(
+            en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port)),
+            self._traffic_manager.send(conn_resp)
+        )
+
 
 
 class EndNodeConnection:
