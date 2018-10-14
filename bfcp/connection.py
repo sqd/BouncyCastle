@@ -1,3 +1,4 @@
+import asyncio
 import threading
 from typing import Callable, List, Tuple, Dict, Union, Optional
 from enum import Enum, auto
@@ -6,7 +7,6 @@ from uuid import uuid4
 from asyncio import ensure_future
 
 from Crypto.Cipher import PKCS1_OAEP
-from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Signature import pkcs1_15
@@ -17,7 +17,6 @@ from Crypto.PublicKey.RSA import RsaKey
 from bfcp.handshake import pubkey_to_proto, proto_to_pubkey
 from bfcp.messages import TrafficManager, NodeNotFoundError
 from bfcp.node import BFCNode
-from bfcp.trust import TrustTableManager
 import utils
 
 
@@ -177,6 +176,7 @@ class OriginalSenderConnection:
         self._on_closed: List[Callable[[Exception], None]] = []
         #: On established connection callbacks
         self._on_established: List[Callable[[Exception], None]] = []
+        self._establish_event_fired = False
 
         # Managers
         self._conn_manager = conn_manager
@@ -187,6 +187,9 @@ class OriginalSenderConnection:
 
         # Packet piecing stuffs
         self._next_recv_index = 0
+        self._close_connection_packet_index: Optional[int] = None
+        self._is_closed = False
+
         #: Packets that arrive too early
         self._future_packets: Dict[int, bfcp_pb2.BouncyMessage] = dict()
         self._next_send_index = 0
@@ -221,6 +224,9 @@ class OriginalSenderConnection:
         self._sync_send(conn_request)
 
     async def on_end_node_found(self, conn_resp: bfcp_pb2.ConnectionResponse):
+        if self._is_closed:
+            return
+
         # Verify the challenge
         end_node_key = proto_to_pubkey(conn_resp.selected_end_node.public_key)
         pkcs1_15.new(end_node_key).verify(self._challenge_bytes,
@@ -241,36 +247,55 @@ class OriginalSenderConnection:
             await self._traffic_manager.send(channel_request)
 
     def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
+        if self._is_closed:
+            return
+
         self._channels.append((channel_uuid, next_hop_pub_key))
-        if len(self._channels) >= MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT:
+        if (not self._establish_event_fired) and \
+                len(self._channels) >= MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT:
+            self._establish_event_fired = True
             for callback in self._on_established:
                 # TODO how do we know what exceptions are raised when there's a failure?
                 callback(None)
 
     def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
+        if self._is_closed:
+            return
+
         bouncy_tcp_bytes = utils.aes_decrypt(encrypted_msg.payload, self._session_key)
         msg = bfcp_pb2.BouncyTcpMessage()
         msg.ParseFromString(bouncy_tcp_bytes)
 
-        if msg.index >= self._next_recv_index:
-            self._future_packets[msg.index] = msg
+        if msg.payload == b'':
+            # The connection has been closed
+            self._close_connection_packet_index = msg.index
+        else:
+            # A new packet is ready to be processed
+            if self._close_connection_packet_index is not None and \
+                    msg.index > self._close_connection_packet_index:
+                raise ConnectionError('Received a packet after the connection was closed by the '
+                                      'server')
+            if msg.index >= self._next_recv_index:
+                self._future_packets[msg.index] = msg
 
-        while self._next_recv_index in self._future_packets:
-            for callback in self._on_new_data:
-                callback(msg.payload)
-            del(self._future_packets[self._next_recv_index])
-            self._next_recv_index += 1
+            while self._next_recv_index in self._future_packets:
+                for callback in self._on_new_data:
+                    callback(msg.payload)
+                del(self._future_packets[self._next_recv_index])
+                self._next_recv_index += 1
 
-    async def send(self, data: bytes):
-        """
-        Sends the specified data to the target server.
-        """
+        if self._next_recv_index == self._close_connection_packet_index:
+            # Connection is ready to be closed
+            self._close_internal()
+
+    async def _send_internal(self, data: bytes):
         bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()
         bouncy_tcp_msg.payload = data
         bouncy_tcp_msg.index = self._next_send_index
         self._next_send_index += 1
 
-        encrypted_tcp_msg = utils.aes_encrypt(bouncy_tcp_msg.SerializeToString(), self._session_key)
+        encrypted_tcp_msg = utils.aes_encrypt(bouncy_tcp_msg.SerializeToString(),
+                                              self._session_key)
 
         for (channel_uuid, next_hop_pub_key) in self._channels:
             msg = bfcp_pb2.ToTargetServer()
@@ -280,6 +305,20 @@ class OriginalSenderConnection:
             msg.channel_id.channel_uuid = channel_uuid
 
             await self._traffic_manager.send(msg, next_hop_pub_key)
+
+    def send(self, data: bytes):
+        """
+        Sends the specified data to the target server. This is a non-blocking call
+        """
+        if data != b'':
+            asyncio.ensure_future(self._send_internal(data))
+
+    def close(self):
+        """
+        Closes the connection with the target server.
+        """
+        asyncio.ensure_future(self._send_internal(b''))
+        self._close_internal()
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
         """
@@ -330,6 +369,14 @@ class OriginalSenderConnection:
 
     def _make_channel_length(self):
         return randint(MIN_CHANNEL_LENGTH, MAX_CHANNEL_LENGTH)
+
+    def _close_internal(self):
+        if self._is_closed:
+            return
+
+        self._is_closed = True
+        for callback in self._on_closed:
+            callback()
 
 
 class SocketConnection:
