@@ -64,13 +64,17 @@ message Node {
     // Public key of the node
     RsaPubKey public_key = 1;
 
+    // Country in which this node is located. As specified in ISO 3166-1 (numeric) -
+    // https://www.iso.org/obp/ui/#search
+    int32 country_code = 2;
+
     // Last known address of the node. Keep mind, that some nodes can have variable addresses. In
     // such case, this might not be valid anymore.
-    string last_known_address = 2;
+    string last_known_address = 3;
 
     // Last known port of the node. Keep mind, that some nodes can have variable ports. In such
     // case, this might not be valid anymore.
-    int32 last_port = 3;
+    int32 last_port = 4;
 }
 
 // NodeTableEntry specifies a single entry in the trust table of a pa.
@@ -132,14 +136,19 @@ message ConnectionRequest {
 // EndNodeRequirements can be arbitarly connected using Or and And operators (see definitions for
 // OrRequirement, AndRequirement).
 message EndNodeRequirement {
+    // Empty requirement is always satisfied
     oneof requirement {
-         int32 ip_subnet = 1;
+         // Format xxx.xxx.xxx.xxx/xx, e.g. 192.168.5.0/26
+         string ip_subnet = 1;
 
          // As specified in ISO 3166-1 (numeric) - https://www.iso.org/obp/ui/#search
          int32 country = 2;
 
          OrRequirement or = 3;
          AndRequirement and = 4;
+
+         // Expects that the contained requirement is not met
+         EndNodeRequirement not = 5;
     }
 }
 
