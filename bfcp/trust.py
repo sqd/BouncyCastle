@@ -54,8 +54,12 @@ class Node:
         self._avg_n: float = 1.0
         self._avg_sum: float = 0.0
 
-    def to_node_table_entry(self) -> bfcp_pb2.NodeTableEntry:
-        raise NotImplementedError()
+    def to_node_table_entry(self, node: bfcp_pb2.Node) -> bfcp_pb2.NodeTableEntry:
+        node_table_entry = bfcp_pb2.NodeTableEntry()
+        node_table_entry.node = node
+        # TODO develop trust_score logic, currently trust_score is set to 1.0
+        node_table_entry.trust_score = 1.0
+        return node_table_entry
 
     @classmethod
     def from_node_table_entry(cls, entry: bfcp_pb2.NodeTableEntry) -> "Node":
@@ -111,7 +115,7 @@ class TrustTableManager:
         # TODO lock and dirty state
         node_table_msg = bfcp_pb2.NodeTable()
         for key, node in self._nodes.items():
-            node_table_msg.entries.append(node.to_node_table_entry())
+            node_table_msg.entries.append(node.to_node_table_entry(node))
         self._traffic_manager.send(node_table_msg, recipient)
 
     def merge_node_table(self, src: RsaKey, table: bfcp_pb2.NodeTable):
