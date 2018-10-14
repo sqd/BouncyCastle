@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import List, Tuple
-from protos.bfcp_pb2 import NodeTable
+from protos.bfcp_pb2 import NodeTable, EndNodeRequirement
 from google.protobuf import text_format
 
 
@@ -56,3 +56,4 @@ class NodeTableIO:
         file = open(file_dir, 'w')
         file.write(text_proto)
         file.close()
+

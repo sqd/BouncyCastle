@@ -254,3 +254,8 @@ message AESKey {
     // encrypted with the public key of the receiver
     bytes key = 1;
 }
+
+// Dictionary that stores a pair (ip_address: string, EndNodeRequirement)
+message MapIPEndNodeRequirement {
+    map<string, EndNodeRequirement> table = 1;
+}
