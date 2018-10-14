@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 from typing import List, Tuple
+from protos.bfcp_pb2 import NodeTable
+from google.protobuf import text_format
+
 
 """ GLOBAL VARIABLES """
 # Specifies how many hops can be done after remaining_hops = 0 before the request is dropped. This
@@ -29,3 +32,27 @@ class HTTPProxyServerConfig:
     def __init__(self, listen_address: List[Tuple[str, int]]):
         self.listen_address = listen_address
         """A list of tuple (address:str, port:int) specifying the locations the server should listen on."""
+
+class NodeTableIO:
+    """
+    Helper class that reads/writes NodeTable object into file
+    """
+
+    def read_from_file(self, file_dir: str) -> NodeTable:
+        """
+        :param file_dir: directory of file to be read
+        :return: NodeTable from reading a file
+        """
+        text_proto = open(file_dir, 'r')
+        node_table = text_format.Parse(text_proto, NodeTable())
+        return node_table
+
+    def write_to_file(self, file_dir: str, node_table: NodeTable) -> None:
+        """
+        Writes NodeTable object into file
+        :param file_dir: directory of file to be written
+        """
+        text_proto = text_format.MessageToString(node_table)
+        file = open(file_dir, 'w')
+        file.write(text_proto)
+        file.close()
