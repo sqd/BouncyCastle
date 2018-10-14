@@ -10,7 +10,8 @@ from typing import Tuple, List, Union
 from event_server import EventConsumer, EventServer
 from config import HTTPProxyServerConfig
 from http_parser import HTTPHeaderParser, HTTPParseStatus, HTTPBodyParser, HTTPRequestHeader
-from bfc import BFCNode, BFCSession, BFCSessionListener
+from bfcp.node import BFCNode
+from bfcp.connection import OriginalSenderConnection
 from utils import Ref
 
 from logger import getLogger
@@ -199,7 +200,7 @@ class HTTPProxyServer:
             self._ev_server.register(listen_socket)
 
 
-class _WorkerSession(BFCSessionListener):
+class _WorkerSession:
     """
     Handles a worker session to get things sent through a BFC node. Since a connection can have multiple HTTP
     requests passing through.
@@ -208,15 +209,15 @@ class _WorkerSession(BFCSessionListener):
         self._location = location
         self._worker = worker
         self._bfc = bfc
-        self._bfc_session: BFCSession = None
+        self._bfc_conn: OriginalSenderConnection = None
 
     def send(self, s: bytes):
         """Send a message out through the BFC."""
-        self._bfc_session.queue_send(s)
+        self._bfc_conn.send(s)
 
     def start(self):
-        self._bfc_session = self._bfc.new_session(self)
-        self._bfc_session.start()
+        self._bfc_conn = self._bfc.new_connection(None, self._location)
+        self._bfc_conn.register_on_new_data(self.recv_callback)
 
     def recv_callback(self, s: bytes):
         self._worker.queue_send(s)
@@ -225,5 +226,5 @@ class _WorkerSession(BFCSessionListener):
         """
         End this session.
         """
-        self._bfc_session.end()
+        self._bfc_conn.close()
 
