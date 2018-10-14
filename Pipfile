@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 protobuf = "*"
+randomdict = "*"
 
 [dev-packages]
 
