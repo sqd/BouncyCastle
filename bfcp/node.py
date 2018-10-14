@@ -7,7 +7,7 @@ import protos.bfcp_pb2 as bfcp_pb2
 
 from bfcp.messages import TrafficManager
 from bfcp.trust import TrustTableManager, SendNodeTableTask, MergeNodeTableTask
-from bfcp.connection import ConnectionManager, Connection
+from bfcp.connection import ConnectionManager, OriginalSenderConnection
 
 
 class BFCNode:
@@ -19,7 +19,10 @@ class BFCNode:
         self.connection_manager = ConnectionManager(self)
         self.traffic_manager = TrafficManager(self)
 
-    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int])->Connection:
+        self.host -> address tuple
+        self.rsa_key
+
+    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int])->OriginalSenderConnection:
         """
         Request a new connection through the BFC network.
         :param en_requirement: the requirement of the end node.
@@ -30,15 +33,15 @@ class BFCNode:
 
     async def handle_message(self, msg: bfcp_pb2.BouncyMessage, sender_key: RsaKey):
         if isinstance(msg, bfcp_pb2.ConnectionRequest):
-            self.connection_manager.on_conn_request(msg, sender_key)
+            await self.connection_manager.on_conn_request(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.ConnectionResponse):
-            self.connection_manager.on_conn_response(msg, sender_key)
+            await self.connection_manager.on_conn_response(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.ChannelRequest):
-            self.connection_manager.on_channel_request(msg, sender_key)
+            await self.connection_manager.on_channel_request(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.ChannelResponse):
-            self.connection_manager.on_channel_response(msg, sender_key)
+            await self.connection_manager.on_channel_response(msg, sender_key)
         elif isinstance(msg, (bfcp_pb2.ToTargetServer, bfcp_pb2.ToOriginalSender)):
-            self.connection_manager.on_payload_received(msg, sender_key)
+            await self.connection_manager.on_payload_received(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.DiscoveryRequest):
             self.trust_table_manager.add_task(SendNodeTableTask(sender_key))
         elif isinstance(msg, bfcp_pb2.NodeTable):
@@ -63,3 +66,7 @@ class BFCNode:
             loop.run_forever()
         finally:
             loop.close()
+
+    def meets_requirements(self, end_node_requirement: bfcp_pb2.EndNodeRequirement) -> bool:
+        return false if not running a server node
+        raise NotImplementedError

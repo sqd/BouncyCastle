@@ -5,12 +5,35 @@ from random import randint
 from uuid import uuid4
 from asyncio import ensure_future
 
+from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Hash import SHA256
+from Crypto.PublicKey import RSA
+from Crypto.Random import get_random_bytes
+from Crypto.Signature import pkcs1_15
+
 import protos.bfcp_pb2 as bfcp_pb2
 from Crypto.PublicKey.RSA import RsaKey
 
+from bfcp.handshake import pubkey_to_proto, proto_to_pubkey
 from bfcp.messages import TrafficManager, NodeNotFoundError
-from bfcp.trust import TrustTableManager, Node
+from bfcp.node import BFCNode
+from bfcp.trust import TrustTableManager
 import utils
+
+
+# Specifies how many hops can be done after remaining_hops = 0 before the request is dropped. This
+# is necessary, since some requirements might not be matched by any of the nodes, and the requests
+# need to be dropped eventually.
+MAX_HOPS_WITHOUT_END_NODE = 5
+
+SIGNATURE_CHALLENGE_BYTES = 128
+
+OS_EN_KEY_SIZE = 256
+SENDER_CONNECTION_KEY_BITS = 4096
+
+CHANNELS_PER_CONNECTION = 5
+MIN_CHANNEL_LENGTH = 5
+MAX_CHANNEL_LENGTH = 10
 
 
 class ConnectionType(Enum):
@@ -21,18 +44,22 @@ class ConnectionType(Enum):
 
 class ConnectionManager:
     def __init__(self, bfc_node: 'BFCNode'):
-        #: Connections that originated from this node. uuid(str) -> Connection
-        self._os_conn: Dict[str, Connection] = dict()
+        #: Connections that originated from this node. uuid(str) -> OriginalSenderConnection
+        self._os_conn: Dict[str, OriginalSenderConnection] = dict()
+
+        #: Connections for which this node is the end node. uuid(str) -> EndNodeConnection
+        self._en_conn: Dict[str, EndNodeConnection] = dict()
 
         #: Connection requests that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_conn_requests: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
         #: Channels that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_channels: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
 
-        self._traffic_manager: TrafficManager = bfc_node.traffic_manager
-        self._trust_table: TrustTableManager = bfc_node.trust_table_manager
+        self._bfc_node = bfc_node
+        self._traffic_manager = bfc_node.traffic_manager
+        self._trust_table = bfc_node.trust_table_manager
 
-    def check_conn_type(self, conn_uuid: str) -> ConnectionType:
+    def _check_conn_type(self, conn_uuid: str) -> ConnectionType:
         """
         Determine if a connection originated from ths node.
         :param conn_uuid: the uuid of the connection being checked.
@@ -45,71 +72,96 @@ class ConnectionManager:
         else:
             return ConnectionType.neither
 
-    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'Connection':
-        conn = Connection(self, self._traffic_manager)
+    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'OriginalSenderConnection':
+        conn = OriginalSenderConnection(self, self._traffic_manager)
         conn.initiate_connection(en_requirement, addr)
         self._os_conn[conn.uuid] = conn
         return conn
 
-    def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: RsaKey) -> None:
-        if self.check_conn_type(msg.connection_params.uuid) != ConnectionType.neither:
-            # Probably an error/malicious attempt
-            return
-
+    async def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: RsaKey) -> None:
         msg.connection_params.remaining_hops -= 1
         remaining_hops = msg.connection_params.remaining_hops
 
-        def send_randomly():
+        async def send_randomly():
             next_node = self._trust_table.get_random_node()
             self._relay_conn_requests[msg.conn_uuid] = (sender_key, next_node.pub_key)
-            self._sync_send(msg, next_node.pub_key)
+            await self._traffic_manager.send(msg, next_node.pub_key)
 
         if remaining_hops > 0:
-            send_randomly()
+            await send_randomly()
         else:
-            node = self._trust_table.get_node_with_requirement(msg.end_node_requirement)
-            if node is None:
-                if remaining_hops < -5:  # TODO config this
-                    raise NodeNotFoundError('A node suitable for becoming EN was not found')
-                else:
-                    send_randomly()
+            if self._bfc_node.meets_requirements(msg.end_node_requirement):
+                await self._become_end_node(msg, sender_key)
             else:
-                self._relay_conn_requests[msg.conn_uuid] = (sender_key, node.pub_key)
-                self._sync_send(msg, node.pub_key)
+                node = self._trust_table.get_node_with_requirement(msg.end_node_requirement)
+                if node is None:
+                    if remaining_hops < -MAX_HOPS_WITHOUT_END_NODE:
+                        raise NodeNotFoundError('A node suitable for becoming EN was not found')
+                    else:
+                        await send_randomly()
+                else:
+                    self._relay_conn_requests[msg.conn_uuid] = (sender_key, node.pub_key)
+                    await self._traffic_manager.send(msg, node.pub_key)
 
-    def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
-        receiver_type = self.check_conn_type(msg.uuid)
+    async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
+        receiver_type = self._check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_conn[msg.uuid].on_end_node_found(Node.fromNodeTableEntry(msg.selected_end_node))
+            await self._os_conn[msg.uuid].on_end_node_found(msg)
         elif receiver_type == ConnectionType.relay:
-            self._sync_send(msg, self._relay_conn_requests[msg.uuid][0])
+            await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
 
-    def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
-        if self.check_conn_type(msg.channel_uuid) == ConnectionType.neither:
+    async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
+        if self._check_conn_type(msg.channel_uuid) == ConnectionType.neither:
             next_node = self._trust_table.get_random_node()
             self._relay_channels[msg.channel_uuid] = (sender_key, next_node.pub_key)
-            self._sync_send(msg, next_node.pub_key)
+            await self._traffic_manager.send(msg, next_node.pub_key)
 
-    def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
-        receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
+    async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
+        receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
         elif receiver_type == ConnectionType.relay:
-            self._sync_send(msg, self._relay_channels[msg.channel_id][0])
+            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][0])
 
-    def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
-        receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
+    async def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
+        receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
-            self._sync_send(msg, self._relay_channels[msg.channel_id][dir_idx])
+            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][dir_idx])
 
-    def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[RsaKey] = None):
-        ensure_future(self._traffic_manager.send(msg, pub_key))
+    async def _become_end_node(self, conn_request: bfcp_pb2.ConnectionRequest, sender_key: RsaKey):
+        # solve the challenge
+        solved_challenge = pkcs1_15.new(self._bfc_node.rsa_key).sign(
+            conn_request.signature_challenge)
+
+        conn_resp = bfcp_pb2.ConnectionResponse()
+        conn_resp.uuid = conn_request.connection_params.uuid
+        conn_resp.selected_end_node.public_key.CopyFrom(
+            pubkey_to_proto(self._bfc_node.rsa_key.publickey()))
+        conn_resp.selected_end_node.last_known_address = self._bfc_node.host[0]
+        conn_resp.selected_end_node.last_known_port = self._bfc_node.host[1]
+
+        conn_resp.signature_challenge_response = solved_challenge
+
+        # Prepare the session key
+        session_key = utils.generate_aes_key(OS_EN_KEY_SIZE)
+
+        original_sender_pub_key = proto_to_pubkey(conn_request.sender_connection_key)
+        cipher_rsa = PKCS1_OAEP.new(original_sender_pub_key)
+        encrypted_session_key = cipher_rsa.encrypt(session_key)
+        conn_resp.session_key.key = encrypted_session_key
+
+        self._en_conn[conn_resp.uuid] = EndNodeConnection()
+        await self._traffic_manager.send(conn_resp)
 
 
-class Connection:
+class EndNodeConnection:
+    raise NotImplementedError()
+
+
+class OriginalSenderConnection:
     """
     A single connection from the original sender to the target server. This should be held by the
     original sender to keep track of the connection to the target server.
@@ -139,7 +191,12 @@ class Connection:
         self._next_send_index = 0
 
         # Info
-        self.uuid: str = None
+        self.uuid: str = str(uuid4())
+
+        # Encryption:
+        self._sender_connection_key: RsaKey = RSA.generate(SENDER_CONNECTION_KEY_BITS)
+        self._challenge_bytes: bytes = get_random_bytes(SIGNATURE_CHALLENGE_BYTES)
+        self._session_key: Optional[bytes] = None
 
     def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
         """
@@ -147,34 +204,42 @@ class Connection:
         @param en_requirement: EndNodeRequirement from client configurations.
         @param ts_address: the address clients want to connect to.
         """
-        conn_params = bfcp_pb2.ConnectionRoutingParams()
-        conn_params.uuid = str(uuid4())
-        self.uuid = conn_params.uuid
-        conn_params.remaining_hops = randint(10, 20)  # TODO config
-
-        # TODO self.sender_connection_signing_key = self.generate_public_key()
-
         conn_request = bfcp_pb2.ConnectionRequest()
-        conn_request.connection_params = conn_params
-        conn_request.end_node_requirement = en_requirement
+
+        conn_request.conn_params.uuid = self.uuid
+        conn_request.conn_params.remaining_hops = randint(10, 20)  # TODO config
+
+        conn_request.end_node_requirement.CopyFrom(en_requirement)
         conn_request.target_server_address = ts_address[0]
         conn_request.target_server_port = ts_address[1]
-        # TODO conn_request.sender_connection_signing_key = sender_connection_signing_key
+
+        conn_request.sender_connection_key = pubkey_to_proto(
+            self._sender_connection_key.publickey())
+        conn_request.signature_challenge = self._challenge_bytes
 
         self._sync_send(conn_request)
 
-    def on_end_node_found(self, en: Node):
+    async def on_end_node_found(self, conn_resp: bfcp_pb2.ConnectionResponse):
+        # Verify the challenge
+        end_node_key = proto_to_pubkey(conn_resp.selected_end_node.public_key)
+        pkcs1_15.new(end_node_key).verify(self._challenge_bytes,
+                                          conn_resp.signature_challenge_response)
+
+        rsa_cipher = PKCS1_OAEP.new(self._sender_connection_key)
+        self._session_key = rsa_cipher.decrypt(conn_resp.session_key.key)
+
         # Found an EN, now try to establish channels
-        # TODO config
-        for i in range(5):
+        for i in range(CHANNELS_PER_CONNECTION):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
-            # TODO channel_request.challenge = handshake.make_rsa_challenge() # TODO
-            channel_request.end_node = en.toNodeTableEntry()
-            channel_request.channel_uuid = channel_uuid
-            # TODO channel_request.original_sender_signature = raise NotImplementedError()
 
-            self._sync_send(channel_request)
+            channel_request.end_node.CopyFrom(conn_resp.selected_end_node)
+            channel_request.channel_uuid = channel_uuid
+            channel_request.routing_params.uuid = self.uuid
+            channel_request.routing_params.remaining_hops = self._make_channel_length()
+
+            # TODO: To whom?
+            await self._traffic_manager.send(channel_request, WHOM)
 
     def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
         self._channels.append((channel_uuid, next_hop_pub_key))
@@ -183,10 +248,10 @@ class Connection:
                 # TODO how do we know what exceptions are raised when there's a failure?
                 callback(None)
 
-    def on_payload_received(self, msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
-        if not isinstance(msg, bfcp_pb2.ToOriginalSender):
-            # TODO panic this should not happen
-            return
+    def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
+        bouncy_tcp_bytes = utils.aes_decrypt(encrypted_msg.payload, self._session_key)
+        msg = bfcp_pb2.BouncyTcpMessage()
+        msg.ParseFromString(bouncy_tcp_bytes)
 
         if msg.index >= self._next_recv_index:
             self._future_packets[msg.index] = msg
@@ -197,22 +262,25 @@ class Connection:
             del(self._future_packets[self._next_recv_index])
             self._next_recv_index += 1
 
-    def send(self, data: bytes):
+    async def send(self, data: bytes):
         """
-        Sends the specified data to the target server. This is a non-blocking call.
+        Sends the specified data to the target server.
         """
-        for (channel_uuid, next_hop_pub_key) in self._channels:
-            channel_id = bfcp_pb2.ChannelID
-            channel_id.connection_uuid = self.uuid
-            channel_id.channel_uuid = channel_uuid
-
-            payload_message = bfcp_pb2.ToTargetServer()
-            payload_message.payload = data
-            payload_message.channel_id = channel_id
-            payload_message.index = self._next_send_index
-            # TODO payload_message.original_sender_signature
-            self._sync_send(payload_message, next_hop_pub_key)
+        bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()
+        bouncy_tcp_msg.payload = data
+        bouncy_tcp_msg.index = self._next_send_index
         self._next_send_index += 1
+
+        encrypted_tcp_msg = utils.aes_encrypt(bouncy_tcp_msg.SerializeToString(), self._session_key)
+
+        for (channel_uuid, next_hop_pub_key) in self._channels:
+            msg = bfcp_pb2.ToTargetServer()
+            msg.payload = encrypted_tcp_msg
+
+            msg.channel_id.connection_uuid = self.uuid
+            msg.channel_id.channel_uuid = channel_uuid
+
+            await self._traffic_manager.send(msg, next_hop_pub_key)
 
     def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
         """
@@ -261,6 +329,9 @@ class Connection:
     def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
         ensure_future(self._traffic_manager.send(msg, pub_key))
 
+    def _make_channel_length(self):
+        return randint(MIN_CHANNEL_LENGTH, MAX_CHANNEL_LENGTH)
+
 
 class SocketConnection:
     """
@@ -268,7 +339,7 @@ class SocketConnection:
     Python's built in socket object.
     """
 
-    def __init__(self, connection: Connection):
+    def __init__(self, connection: OriginalSenderConnection):
         """
         :param connection: The connection to wrap
         """
