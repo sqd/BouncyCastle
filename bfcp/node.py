@@ -16,6 +16,7 @@ class BFCNode:
     """
     def __init__(self):
         self.trust_table_manager = TrustTableManager(self)
+        self.trust_table_manager.run()
         self.connection_manager = ConnectionManager(self)
         self.traffic_manager = TrafficManager(self)
 
