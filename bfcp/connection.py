@@ -14,7 +14,7 @@ from Crypto.Signature import pkcs1_15
 import protos.bfcp_pb2 as bfcp_pb2
 from Crypto.PublicKey.RSA import RsaKey
 
-from bfcp.handshake import pubkey_to_proto, proto_to_pubkey
+from bfcp.handshake import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
 from bfcp.node import BFCNode
 from bfcp.trust import TrustTableManager, Node
@@ -31,7 +31,11 @@ class ConnectionType(Enum):
 
 
 class ConnectionManager:
-    def __init__(self, bfc_node: 'BFCNode'):
+    def __init__(self, bfc_node: BFCNode):
+        self._bfc_node = bfc_node
+        self._traffic_manager = bfc_node.traffic_manager
+        self._trust_table = bfc_node.trust_table_manager
+
         #: Connections that originated from this node. uuid(str) -> OriginalSenderConnection
         self._os_conn: Dict[str, OriginalSenderConnection] = dict()
 
@@ -43,10 +47,6 @@ class ConnectionManager:
         self._relay_conn_requests: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
         #: Channels that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_channels: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
-
-        self._bfc_node = bfc_node
-        self._traffic_manager = bfc_node.traffic_manager
-        self._trust_table = bfc_node.trust_table_manager
 
     def _check_conn_type(self, conn_uuid: str) -> ConnectionType:
         """
@@ -75,8 +75,8 @@ class ConnectionManager:
 
         async def send_randomly():
             next_node = self._trust_table.get_random_node()
-            self._relay_conn_requests[msg.conn_uuid] = (sender_key, next_node.pub_key)
-            await self._traffic_manager.send(msg, next_node.pub_key)
+            self._relay_conn_requests[msg.conn_uuid] = (sender_key, get_node_pub_key(next_node))
+            await self._traffic_manager.send(msg, get_node_pub_key(next_node))
 
         if remaining_hops > 0:
             await send_randomly()
@@ -91,8 +91,8 @@ class ConnectionManager:
                     else:
                         await send_randomly()
                 else:
-                    self._relay_conn_requests[msg.conn_uuid] = (sender_key, node.pub_key)
-                    await self._traffic_manager.send(msg, node.pub_key)
+                    self._relay_conn_requests[msg.conn_uuid] = (sender_key, get_node_pub_key(node))
+                    await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
         receiver_type = self._check_conn_type(msg.uuid)
@@ -102,7 +102,7 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
-        if Node.from_node_table_entry(msg.end_node).pub_key == self._bfc_node.pub_key:
+        if Node.from_node_table_entry(msg.end_node).pub_key == self._bfc_node.rsa_key:
             # I am the end node
             self._en_conn[msg.routing_params.connection_uuid][1].add((msg.channel_uuid, sender_key))
         elif self._check_conn_type(msg.routing_params.connection_uuid) == ConnectionType.neither:
@@ -111,8 +111,8 @@ class ConnectionManager:
                 if msg.connection_params.remaining_hops > 0 \
                 else Node.from_node_table_entry(msg.end_node)
 
-            self._relay_channels[msg.channel_uuid] = (sender_key, next_node.pub_key)
-            await self._traffic_manager.send(msg, next_node.pub_key)
+            self._relay_channels[msg.channel_uuid] = (sender_key, get_node_pub_key(next_node))
+            await self._traffic_manager.send(msg, get_node_pub_key(next_node))
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
@@ -129,7 +129,7 @@ class ConnectionManager:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][dir_idx])
         elif receiver_type == ConnectionType.end:
-            self._en_conn[msg.channel_id.connection_uuid][0].send(msg.payload)
+            await self._en_conn[msg.channel_id.connection_uuid][0].send(msg.payload)
 
     async def _become_end_node(self, conn_request: bfcp_pb2.ConnectionRequest, sender_key: RsaKey):
         """
