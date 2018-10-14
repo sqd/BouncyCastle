@@ -9,17 +9,17 @@ from bfcp.trust import TrustTableManager
 
 import utils
 
+
 class ConnectionType(Enum):
     origin = auto()
     relay = auto()
     neither = auto()
 
+
 class ConnectionManager:
     def __init__(self, bfc_node: 'BFCNode'):
         #: Connections that originated from this node. uuid(str) -> Connection
-        self._os_connections: Dict[str, Connection] = dict()
-        #: Channels that originated from this node. uuid(str) -> Connection.
-        self._os_channels_2_conn: Dict[str, Connection] = dict()
+        self._os_conn: Dict[str, Connection] = dict()
 
         #: Connection requests that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_conn_requests: Dict[str, Tuple[bytes, bytes]] = dict()
@@ -34,7 +34,7 @@ class ConnectionManager:
         :param conn_uuid: the uuid of the connection being checked.
         :return: the type of the connection.
         """
-        if conn_uuid in self._os_connections:
+        if conn_uuid in self._os_conn:
             return ConnectionType.origin
         elif conn_uuid in self._relay_conn_requests:
             return ConnectionType.relay
@@ -44,6 +44,7 @@ class ConnectionManager:
     def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'Connection':
         conn = Connection(self._traffic_manager)
         conn.initiate_connection(en_requirement, addr)
+        self._os_conn[conn.uuid] = conn
         return conn
 
     def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: bytes) -> None:
@@ -55,7 +56,7 @@ class ConnectionManager:
     def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: bytes):
         receiver_type = self.check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_connections[msg.uuid].on_EN_found(msg.selected_end_node)
+            self._os_conn[msg.uuid].on_end_node_found(msg.selected_end_node)
         elif receiver_type == ConnectionType.relay:
             self._traffic_manager.send(self._relay_conn_requests[msg.uuid][0], msg)
 
@@ -68,14 +69,14 @@ class ConnectionManager:
     def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_connections[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
+            self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
         elif receiver_type == ConnectionType.relay:
             self._traffic_manager.send(self._relay_channels[msg.channel_id][0], msg)
 
     def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer]):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_connections[msg.channel_id.connection_uuid].on_payload_received(msg)
+            self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg)
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             self._traffic_manager.send(self._relay_channels[msg.channel_id][dir_idx], msg)
@@ -89,63 +90,79 @@ class Connection:
     It is required to call initiate_connection() after creating the Connection object. Only then
     will the connection be formed.
     """
-    def __init__(self, conn_manager, traffic_manager):
+    def __init__(self, conn_manager: ConnectionManager, traffic_manager: TrafficManager):
+        #: On new data callbacks
         self._on_new_data: List[Callable[[bytes], None]] = []
+        #: On connection closed callbacks
         self._on_closed: List[Callable[[Exception], None]] = []
+        #: On established connection callbacks
         self._on_established: List[Callable[[Exception], None]] = []
+
+        # Managers
         self._conn_manager = conn_manager
         self._traffic_manager = traffic_manager
-        self._channels = [] # list of (uuid, next hop pub key)
+
+        #: A list of (channel uuid, next hop pub key)
+        self._channels: List[Tuple[str, bytes]] = []
+
+        # Packet piecing stuffs
         self._next_recv_index = 0
-        self._future_packets = dict() # index -> msg
+        #: Packets that arrive too early
+        self._future_packets: Dict[int, bfcp_pb2.BouncyMessage] = dict()
         self._next_send_index = 0
+
+        # Info
+        self.uuid: str = None
 
     def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
         """
         This function can only be called once.
-        @param en_requirement: EndNodeRequirement from client configurations
-        @param ts_address: string address clients want to connect to
+        @param en_requirement: EndNodeRequirement from client configurations.
+        @param ts_address: the address clients want to connect to.
         """
-        connection_params = bfcp_pb2.ConnectionRoutingParams()
-        connection_params.uuid = str(uuid4())
-        connection_params.remaining_hops = randint(10,20)
+        conn_params = bfcp_pb2.ConnectionRoutingParams()
+        conn_params.uuid = str(uuid4())
+        self.uuid = conn_params.uuid
+        conn_params.remaining_hops = randint(10,20) # TODO config
 
-        self._end_node_requirement = en_requirement
-        self._target_server_address = ts_address
+        # TODO self.sender_connection_signing_key = self.generate_public_key()
 
-        self.sender_connection_signing_key = self.generate_public_key()
+        conn_request = bfcp_pb2.ConnectionRequest()
+        conn_request.connection_params = conn_params
+        conn_request.end_node_requirement = en_requirement
+        conn_request.target_server_address = ts_address[0]
+        conn_request.target_server_port = ts_address[1]
+        # TODO conn_request.sender_connection_signing_key = sender_connection_signing_key
 
-        connection_request = bfcp_pb2.ConnectionRequest()
-        connection_request.connection_params = connection_params
-        connection_request.end_node_requirement = end_node_requirement
-        connection_request.target_server_address = ts_address[0]
-        connection_request.target_server_port = ts_address[1]
-        connection_request.sender_connection_signing_key = sender_connection_signing_key
+        self._traffic_manager.send(choose_a_node, conn_request) # TODO choose a node
 
-        self._conn_manager.register_os_connection(connection_request.uuid)
-        self._traffic_manager.send(choose_a_node, connection_request) # TODO choose a node
-
-    def on_EN_found(self, en):
+    def on_end_node_found(self, en):
         # Found an EN, now try to establish channels
-
-        for i in range(config.channel_number):
+        # TODO config
+        for i in range(5):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
-            channel_request.challenge = handshake.make_rsa_challenge() # TODO
+            # TODO channel_request.challenge = handshake.make_rsa_challenge() # TODO
             channel_request.end_node = en
             channel_request.channel_uuid = channel_uuid
-            channel_request.original_sender_signature = raise NotImplementedError()
+            # TODO channel_request.original_sender_signature = raise NotImplementedError()
 
-            self._conn_manager.register_os_channel(channel_uuid)
             self._traffic_manager.send(choose_a_node.pub_key, channel_request) # TODO choose a node
 
-    def on_channel_established(self, channel_uuid, next_hop_pub_key):
+    def on_channel_established(self, channel_uuid: str, next_hop_pub_key: bytes):
         self._channels.append((channel_uuid, next_hop_pub_key))
+        if len(self._channels) >= 5:  # TODO config this
+            for callback in self._on_established:
+                # TODO how do we know what exceptions are raised when there's a failure?
+                callback(None)
 
-    def on_payload_received(msg: bfcp_pb2.ToOriginalSender):
+    def on_payload_received(self, msg: bfcp_pb2.ToOriginalSender):
+        if not isinstance(msg, bfcp_pb2.ToOriginalSender):
+            # TODO panic this should not happen
+            return
+
         if msg.index >= self._next_recv_index:
             self._future_packets[msg.index] = msg
-
 
         while self._next_recv_index in self._future_packets:
             for callback in self._on_new_data:
@@ -153,16 +170,20 @@ class Connection:
             del(self._future_packets[self._next_recv_index])
             self._next_recv_index += 1
 
-
     def send(self, data: bytes):
         """
         Sends the specified data to the target server. This is a non-blocking call.
         """
         for (channel_uuid, next_hop_pub_key) in self._channels:
+            channel_id = bfcp_pb2.ChannelID
+            channel_id.connection_uuid = self.uuid
+            channel_id.channel_uuid = channel_uuid
+
             payload_message = bfcp_pb2.ToTargetServer()
             payload_message.payload = data
-            payload_message.channel_id = channel_uuid
+            payload_message.channel_id = channel_id
             payload_message.index = self._next_send_index
+            # TODO payload_message.original_sender_signature
             self._traffic_manager.send(next_hop_pub_key, payload_message)
         self._next_send_index += 1
 
