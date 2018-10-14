@@ -9,4 +9,6 @@ services:
       dockerfile: Dockerfile-http_proxy
       context: .
     working_dir: "/app"
+    volumes:
+      - ./:/app
     command: ["pytest"]
