@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 import asyncio
-from typing import Tuple
+from typing import Tuple, Optional
 
 from Crypto.PublicKey.RSA import RsaKey
 import protos.bfcp_pb2 as bfcp_pb2
@@ -14,13 +14,16 @@ class BFCNode:
     """
     A BFCNode.
     """
-    def __init__(self):
+    def __init__(self, host: Optional[Tuple[str, int]], rsa_key: RsaKey):
+        self._async_loop = asyncio.get_event_loop()
+
         self.trust_table_manager = TrustTableManager(self)
         self.connection_manager = ConnectionManager(self)
-        self.traffic_manager = TrafficManager(self)
+        self.traffic_manager = TrafficManager(self.trust_table_manager, rsa_key, self._async_loop,
+                                              host)
 
-        self.host -> address tuple
-        self.rsa_key
+        self.host = host
+        self.rsa_key = rsa_key
 
     def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int])->OriginalSenderConnection:
         """
@@ -46,9 +49,6 @@ class BFCNode:
             self.trust_table_manager.add_task(SendNodeTableTask(sender_key))
         elif isinstance(msg, bfcp_pb2.NodeTable):
             self.trust_table_manager.add_task(MergeNodeTableTask(sender_key, msg))
-        elif isinstance(msg, bfcp_pb2.CloseConnectionRequest):
-            # TODO
-            raise NotImplementedError()
 
     def run(self)->None:
         """
@@ -60,12 +60,11 @@ class BFCNode:
                 for sender_key, msg in new_messages:
                     await self.handle_message(msg, sender_key)
 
-        loop = asyncio.get_event_loop()
         asyncio.ensure_future(main_loop())
         try:
-            loop.run_forever()
+            self._async_loop.run_forever()
         finally:
-            loop.close()
+            self._async_loop.close()
 
     def meets_requirements(self, end_node_requirement: bfcp_pb2.EndNodeRequirement) -> bool:
         return false if not running a server node
