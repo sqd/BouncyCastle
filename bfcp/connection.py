@@ -51,10 +51,30 @@ class ConnectionManager:
         return conn
 
     def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: bytes) -> None:
-        if self.check_conn_type(msg.connection_params.uuid) == ConnectionType.neither:
-            next_node_pub_key = self._trust_table.get_random_node()
-            self._relay_conn_requests[msg.conn_uuid] = (sender_key, next_node_pub_key)
-            self._sync_send(msg, next_node_pub_key)
+        if self.check_conn_type(msg.connection_params.uuid) != ConnectionType.neither:
+            # Probably an error/malicious attempt
+            return
+
+        msg.connection_params.remaining_hops -= 1
+        remaining_hops = msg.connection_params.remaining_hops
+
+        def send_randomly():
+            next_node = self._trust_table.get_random_node()
+            self._relay_conn_requests[msg.conn_uuid] = (sender_key, next_node.pub_key)
+            self._sync_send(msg, next_node.pub_key)
+
+        if remaining_hops > 0:
+            send_randomly()
+        else:
+            node = self._trust_table.get_node_with_requirement(msg.end_node_requirement)
+            if node is None:
+                if remaining_hops < -5:  # TODO config this
+                    raise NodeNotFoundError('A node suitable for becoming EN was not found')
+                else:
+                    send_randomly()
+            else:
+                self._relay_conn_requests[msg.conn_uuid] = (sender_key, node.pub_key)
+                self._sync_send(msg, node.pub_key)
 
     def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: bytes):
         receiver_type = self.check_conn_type(msg.uuid)
@@ -65,9 +85,9 @@ class ConnectionManager:
 
     def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key):
         if self.check_conn_type(msg.channel_uuid) == ConnectionType.neither:
-            next_node_pub_key = self._trust_table.get_random_node()
-            self._relay_channels[msg.channel_uuid] = (sender_key, next_node_pub_key)
-            self._sync_send(msg, next_node_pub_key)
+            next_node = self._trust_table.get_random_node()
+            self._relay_channels[msg.channel_uuid] = (sender_key, next_node.pub_key)
+            self._sync_send(msg, next_node.pub_key)
 
     def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
@@ -204,15 +224,6 @@ class Connection:
         """
         Unregisters the specified callback function. Note, this needs to be the same object as was
         passed into register_on_new_data().
-
-        Example:
-
-            callback = lambda data: print(data.decode())
-            connection.register_on_new_data(callback)
-
-            # Do something ...
-
-            connection.unregister_on_new_data(callback)
         """
         self._on_new_data.remove(callback)
 
@@ -227,15 +238,6 @@ class Connection:
         """
         Unregisters the specified callback function. Note, this needs to be the same object as was
         passed into register_on_established().
-
-        Example:
-
-            callback = lambda err: print(err)
-            connection.register_on_established(callback)
-
-            # Do something ...
-
-            connection.unregister_on_established(callback)
         """
         self._on_established.remove(callback)
 
@@ -252,45 +254,11 @@ class Connection:
         """
         Unregisters the specified callback function. Note, this needs to be the same object as was
         passed into register_on_closed().
-
-        Example:
-
-            callback = lambda err: print(str(err))
-            connection.register_on_closed(callback)
-
-            # Do something ...
-
-            connection.unregister_on_closed(callback)
         """
         self._on_closed.remove(callback)
 
     def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
         ensure_future(self._traffic_manager.send(pub_key, msg))
-
-
-def handle_connection_request(conn_request: bfcp_pb2.ConnectionRequest, traffic_manager: TrafficManager):
-    """
-    Static function that receives a connections request and 
-    decides where should the connection request be sent
-    """
-    remaining_hops = conn_request.connection_params.conn_request
-    conn_request.connection_params.conn_request -= 1
-    if remaining_hops >= 0:
-        if remaining_hops == 1:
-            # send to bouncy node that is well-suited to become EN 
-            # if we want to access contents from China, EN should be in China
-            trust_table_manager = TrustTableManager()
-            pub_key = trust_table_manager.get_node_with_requirement(conn_request.end_node_requirement)
-            traffic_manager.send(pub_key, conn_request)
-        else:
-            # bounce to any random bouncy node
-            # TODO: implement TrafficManager.run and provide arguments
-            traffic_manager.run()
-    else:
-        # remaining_hops is negative, meaning that we were not able to
-        # find a connection with desired requirements
-        # thus, drop the connection
-        raise NodeNotFoundError('A node suitable for becoming EN was not found')
 
 
 class SocketConnection:
