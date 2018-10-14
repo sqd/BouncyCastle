@@ -13,8 +13,6 @@ import protos.bfcp_pb2 as bfcp_pb2
 from bfcp.protocol import proto_to_pubkey, pubkey_to_deterministic_string, get_node_pub_key, \
     matches_requirements
 
-from bfcp.messages import TrafficManager
-
 
 class TrustTableManagerTask:
     def run(self, tm: 'TrustTableManager') -> None:
@@ -90,7 +88,7 @@ def update_trust_score(node: bfcp_pb2.NodeTableEntry, src_trust_score: float, ne
 
 
 class TrustTableManager:
-    def __init__(self, initial_node_table: bfcp_pb2.NodeTable, traffic_manager: TrafficManager):
+    def __init__(self, initial_node_table: bfcp_pb2.NodeTable, traffic_manager: 'TrafficManager'):
         self._nodes = self._parse_initial_node_table(initial_node_table)
         self._task_queue = Queue()
         self._traffic_manager = traffic_manager
