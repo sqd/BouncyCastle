@@ -3,22 +3,17 @@ This module builds a layer of abstraction for sending and receiving information 
 BouncyMessages instead of raw TCP traffic.
 """
 import asyncio
-import asyncore
-import socket
-import threading
 from asyncio import StreamReader, StreamWriter
-from typing import Callable, Optional, Dict, Union, Tuple, List
+from typing import Optional, Dict, Tuple, List
 
 from Crypto.PublicKey.RSA import RsaKey
-from google.protobuf.message import Message
 
-from bfcp.handshake import pubkey_to_proto, PeerHandshake, pubkey_to_deterministic_string
+from bfcp.handshake import PeerHandshake, pubkey_to_deterministic_string
 from bfcp.trust import TrustTableManager
-from protos import bfcp_pb2
-from protos.bfcp_pb2 import BouncyMessage, ConnectionResponse
+from protos.bfcp_pb2 import BouncyMessage
 
 from logger import getLogger
-from utils import BytesFifoQueue, recv_proto_msg, send_proto_msg
+from utils import recv_proto_msg, send_proto_msg
 
 _log = getLogger(__name__)
 
@@ -95,8 +90,7 @@ class TrafficManager:
         self._next_message_futures = set()
 
         # This will be used so that new_messages() can block if there are no sockets to listen to
-        # TODO: modify this accordingly when sockets are removed
-        self._sockets_available_future = self._async_loop.create_future()
+        self._new_socket_available = self._async_loop.create_future()
 
         self._open_client_sockets: Dict[bytes, BfcpSocketHandler] = {}
         self._open_server_sockets: Dict[bytes, BfcpSocketHandler] = {}
@@ -138,22 +132,42 @@ class TrafficManager:
 
     def _add_future_for_next_message_from(self, socket_handler: BfcpSocketHandler):
         self._next_message_futures.add(
-            self._wrap_future_with_socket_handler(socket_handler.next_message(), socket_handler)
+            # It is essential to wrap these into Tasks. Otherwise, after calling asyncio.wait()
+            # our list of "done" tasks will contain different objects than the _new_message_futures
+            # list. Therefore, we wouldn't be able to remove the completed tasks.
+            asyncio.ensure_future(
+                self._wrap_future_with_socket_handler(socket_handler.next_message(), socket_handler)
+            )
         )
 
     async def new_messages(self) -> List[Tuple[RsaKey, BouncyMessage]]:
-        if self._next_message_futures == []:
-            await self._sockets_available_future
+        if not self._next_message_futures:
+            await self._new_socket_available
 
-        done, self._next_message_futures = await asyncio.wait(
-            self._next_message_futures, loop=self._async_loop, return_when=asyncio.FIRST_COMPLETED)
+        # We will also wait on self._new_socket_available. If we get a new socket, we will keep
+        # blocking on the call below even when the new socket has messages. This is because the
+        # initial call was made without that socket in mind.
+        self._new_socket_available = self._async_loop.create_future()
+        done, _ = await asyncio.wait(self._next_message_futures | {self._new_socket_available},
+                                     loop=self._async_loop, return_when=asyncio.FIRST_COMPLETED)
 
         msgs = []
+        found_new_socket = False
         for f in done:
-            msg, socket_handler = await f
-            msgs.append((socket_handler.get_peer_key(), msg))
-            self._add_future_for_next_message_from(socket_handler)
-        return msgs
+            if f == self._new_socket_available:
+                found_new_socket = True
+            else:
+                msg, socket_handler = await f
+                msgs.append((socket_handler.get_peer_key(), msg))
+
+                self._next_message_futures.remove(f)
+                self._add_future_for_next_message_from(socket_handler)
+
+        if msgs == [] and found_new_socket:
+            # retry
+            return await self.new_messages()
+        else:
+            return msgs
 
     def _register_server_socket_handler(self, socket_handler: BfcpSocketHandler):
         pub_key_index = pubkey_to_deterministic_string(socket_handler.get_peer_key())
@@ -169,11 +183,14 @@ class TrafficManager:
         await socket_handler.establish()
         self._add_future_for_next_message_from(socket_handler)
 
-        if not self._sockets_available_future.done():
-            self._sockets_available_future.set_result(True)
+        if not self._new_socket_available.done():
+            self._new_socket_available.set_result(True)
 
         return socket_handler
 
     async def _on_new_server_socket(self, reader, writer):
         handler = await self._open_new_socket_handler(reader, writer)
         self._register_server_socket_handler(handler)
+
+    def close(self):
+        self._server.close()
