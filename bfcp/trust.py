@@ -148,6 +148,9 @@ class TrustTableManager:
         # TODO there may be a better solution
         return self._nodes.random_value()
 
+    def add_task(self, task: TrustTableManagerTask):
+        self._task_queue.put(task)
+
     def run(self) -> None:
         """
         Spin up a new thread for this manager.
@@ -158,3 +161,5 @@ class TrustTableManager:
         while True:  # TODO maybe have an exit signal for faster ctrl-c
             task: TrustTableManagerTask = self._task_queue.get(True, 10)  # TODO config timeout
             task.run(self)
+            if time() - self._last_update_timestamp >= 10:  # TODO config
+                self.add_task(UpdateNodeTableTask())
