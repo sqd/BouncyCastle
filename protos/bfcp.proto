@@ -71,6 +71,10 @@ message Node {
     // Last known port of the node. Keep mind, that some nodes can have variable ports. In such
     // case, this might not be valid anymore.
     int32 last_port = 3;
+
+    // Properties for calculating avergae
+    float avg_n = 4; // default value should be 1.0
+    float avg_sum = 5; // default value should be 0.0
 }
 
 // NodeTableEntry specifies a single entry in the trust table of a pa.

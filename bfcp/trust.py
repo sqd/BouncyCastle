@@ -41,56 +41,46 @@ class UpdateNodeTableTask(TrustTableManagerTask):
         tm.update_node_table()
 
 
-class Node:
+"""
+Statuc functions for bfcp_pb2.Node struct
+"""
+
+def to_node_table_entry(node: bfcp_pb2.Node) -> bfcp_pb2.NodeTableEntry:
+    """ Constructs and returns NodeTableEntry, given a Node """
+    node_table_entry = bfcp_pb2.NodeTableEntry()
+    node_table_entry.node = node
+    # TODO develop trust_score logic, currently trust_score is set to 1.0
+    node_table_entry.trust_score = 1.0
+    return node_table_entry
+
+def from_node_table_entry(entry: bfcp_pb2.NodeTableEntry) -> bfcp_pb2.Node:
+    """ Returns NodeTableEntry's Node property """
+    return entry.node
+
+def new_trust_score(node: bfcp_pb2.Node, src_trust_score: float, new_trust_score: float) -> float:
     """
-    A node. Corresponds to proto NodeTableEntry.
+    Compute node's trust score from scratch.
+    :param src_trust_score: the trust score of a node S.
+    :param new_trust_score: S's trust on this node.
+    :return the new trust score.
     """
-    def __init__(self, pub_key: RsaKey, last_addr: Tuple[str, int], trust_score: float):
-        self.pub_key = pub_key
-        self.last_addr = last_addr
-        self.trust_score = trust_score
+    node.avg_n = 1.0
+    node.avg_sum = 0.0
+    node.trust_score = src_trust_score*new_trust_score
+    return node.trust_score
 
-        # avg stuff
-        self._avg_n: float = 1.0
-        self._avg_sum: float = 0.0
-
-    def to_node_table_entry(self, node: bfcp_pb2.Node) -> bfcp_pb2.NodeTableEntry:
-        node_table_entry = bfcp_pb2.NodeTableEntry()
-        node_table_entry.node = node
-        # TODO develop trust_score logic, currently trust_score is set to 1.0
-        node_table_entry.trust_score = 1.0
-        return node_table_entry
-
-    @classmethod
-    def from_node_table_entry(cls, entry: bfcp_pb2.NodeTableEntry) -> "Node":
-        # TODO rsa key deserialization
-        return Node(entry.node.public_key, (entry.node.last_known_address, entry.node.last_port), entry.trust_score)
-
-    def new_trust_score(self, src_trust_score: float, new_trust_score: float) -> float:
-        """
-        Compute this node's trust score from scratch.
-        :param src_trust_score: the trust score of a node S.
-        :param new_trust_score: S's trust on this node.
-        :return the new trust score.
-        """
-        self._avg_n = 1.0
-        self._avg_sum = 0.0
-        self.trust_score = src_trust_score*new_trust_score
-        return self.trust_score
-
-    def update_trust_score(self, src_trust_score: float, new_trust_score: float) -> float:
-        """
-        Update this node's trust score.
-        :param src_trust_score: the trust score of a node S.
-        :param new_trust_score: S's trust on this node.
-        :return the new trust score.
-        """
-        # TODO whatever algo
-        self._avg_n += src_trust_score
-        self._avg_sum += src_trust_score*new_trust_score
-        self.trust_score = self._avg_sum/self._avg_n
-        return self.trust_score
-
+def update_trust_score(node: bfcp_pb2.Node, src_trust_score: float, new_trust_score: float) -> float:
+    """
+    Update node's trust score.
+    :param src_trust_score: the trust score of a node S.
+    :param new_trust_score: S's trust on this node.
+    :return the new trust score.
+    """
+    # TODO whatever algo
+    node.avg_n += src_trust_score
+    node.avg_sum += src_trust_score*new_trust_score
+    node.trust_score = node.avg_sum/node.avg_n
+    return node.trust_score
 
 class TrustTableManager:
     def __init__(self, bfc_node: 'BFCNode'):
