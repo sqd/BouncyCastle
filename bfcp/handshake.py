@@ -9,7 +9,7 @@ from google.protobuf.message import Message
 from protos.bfcp_pb2 import RsaChallenge, RsaChallengeResponse, RsaPubKey, PeerHello, AESKey
 from utils import generate_aes_key, send_proto_msg, recv_proto_msg
 
-CHALLENGE_SIZE = 64
+from config import *
 
 
 def make_rsa_challenge(challenged_pub_key: RsaKey) -> Tuple[bytes, RsaChallenge]:
