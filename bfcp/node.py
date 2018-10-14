@@ -27,6 +27,19 @@ class BFCNode:
         """
         return self.connection_manager.new_connection(en_requirement, addr)
 
+    async def handle_message(self, msg, sender_key):
+        if isinstance(msg, bfcp_pb2.ConnectionResponse):
+            self.connection_manager.on_conn_response(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.ChannelResponse):
+            self.connection_manager.on_channel_response(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.ToOriginalSender):
+            self.connection_manager.on_payload_received(msg)
+        # we're helping out other people below this line
+        elif isinstance(msg, bfcp_pb2.ToTargetServer):
+            pass
+        elif isinstance(msg, bfcp_pb2.ToTargetServer):
+            pass
+
     def run(self)->None:
         """
         Spin up ths BFC node.
@@ -34,18 +47,8 @@ class BFCNode:
         async def main_loop():
             while True:
                 new_messages = await self.traffic_manager.new_messages()
-                for msg, sender_key in new_messages:
-                    if isinstance(msg, bfcp_pb2.ConnectionResponse):
-                        self.connection_manager.on_conn_response(msg, sender_key)
-                    elif isinstance(msg, bfcp_pb2.ChannelResponse):
-                        self.connection_manager.on_channel_response(msg, sender_key)
-                    elif isinstance(msg, bfcp_pb2.ToOriginalSender):
-                        self.connection_manager.on_payload_received(msg)
-                    # we're helping out other people below this line
-                    elif isinstance(msg, bfcp_pb2.ToTargetServer):
-                        pass
-                    elif isinstance(msg, bfcp_pb2.ToTargetServer):
-                        pass
+                for sender_key, msg in new_messages:
+                    await self.handle_message(msg, sender_key)
 
         loop = asyncio.get_event_loop()
         asyncio.ensure_future(main_loop())
