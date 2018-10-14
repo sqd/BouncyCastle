@@ -8,7 +8,7 @@ from typing import Optional, Dict, Tuple, List
 
 from Crypto.PublicKey.RSA import RsaKey
 
-from bfcp.handshake import PeerHandshake, pubkey_to_deterministic_string
+from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string
 from bfcp.trust import TrustTableManager
 from protos.bfcp_pb2 import BouncyMessage
 

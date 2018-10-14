@@ -10,10 +10,10 @@ from Crypto.PublicKey.RSA import RsaKey
 from randomdict import RandomDict
 
 import protos.bfcp_pb2 as bfcp_pb2
-from bfcp.handshake import proto_to_pubkey, pubkey_to_deterministic_string, get_node_pub_key
+from bfcp.protocol import proto_to_pubkey, pubkey_to_deterministic_string, get_node_pub_key, \
+    matches_requirements
 
 from bfcp.messages import TrafficManager
-from bfcp.node import BFCNode
 
 
 class TrustTableManagerTask:
@@ -135,9 +135,13 @@ class TrustTableManager:
         """
         return self._nodes.get(pub_key, None)
 
-    def get_node_with_requirement(self, en_requirement: bfcp_pb2.EndNodeRequirement) -> RsaKey:
+    def get_node_with_requirement(self, en_requirement: bfcp_pb2.EndNodeRequirement) -> Optional[bfcp_pb2.NodeTableEntry]:
         """Returns a node public key, given EndNodeRequirement like location must be in China"""
-        raise NotImplementedError()
+        # TODO: this is really slow (O(n)), we should use tries and hashmaps for faster lookup
+        for key, node in self._nodes.items():
+            if matches_requirements(node.node, en_requirement):
+                return node
+        return None
 
     def get_random_node(self) -> bfcp_pb2.NodeTableEntry:
         """

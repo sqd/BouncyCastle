@@ -9,6 +9,8 @@ from Crypto import Random
 from Crypto.Cipher import AES
 from google.protobuf.message import Message
 
+from protos.bfcp_pb2 import NodeTableEntry
+
 T = TypeVar('T')
 
 

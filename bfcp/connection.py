@@ -14,7 +14,7 @@ from Crypto.Signature import pkcs1_15
 import protos.bfcp_pb2 as bfcp_pb2
 from Crypto.PublicKey.RSA import RsaKey
 
-from bfcp.handshake import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
+from bfcp.protocol import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
 from bfcp.node import BFCNode
 from bfcp.trust import TrustTableManager, Node

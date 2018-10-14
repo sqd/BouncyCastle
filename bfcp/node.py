@@ -51,17 +51,17 @@ class BFCNode:
         elif isinstance(msg, bfcp_pb2.NodeTable):
             self.trust_table_manager.add_task(MergeNodeTableTask(sender_key, msg))
 
+    async def main_loop(self):
+        while True:
+            new_messages = await self.traffic_manager.new_messages()
+            for sender_key, msg in new_messages:
+                await self.handle_message(msg, sender_key)
+
     def run(self)->None:
         """
         Spin up ths BFC node.
         """
-        async def main_loop():
-            while True:
-                new_messages = await self.traffic_manager.new_messages()
-                for sender_key, msg in new_messages:
-                    await self.handle_message(msg, sender_key)
-
-        asyncio.ensure_future(main_loop())
+        asyncio.ensure_future(self.main_loop())
         try:
             self._async_loop.run_forever()
         finally:
