@@ -9,7 +9,7 @@ import protos.bfcp_pb2 as bfcp_pb2
 from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.messages import TrafficManager, NodeNotFoundError
-from bfcp.trust import TrustTableManager
+from bfcp.trust import TrustTableManager, Node
 import utils
 
 
@@ -80,27 +80,27 @@ class ConnectionManager:
     def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
         receiver_type = self.check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_conn[msg.uuid].on_end_node_found(msg.selected_end_node)
+            self._os_conn[msg.uuid].on_end_node_found(Node.fromNodeTableEntry(msg.selected_end_node))
         elif receiver_type == ConnectionType.relay:
             self._sync_send(msg, self._relay_conn_requests[msg.uuid][0])
 
-    def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key):
+    def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
         if self.check_conn_type(msg.channel_uuid) == ConnectionType.neither:
             next_node = self._trust_table.get_random_node()
             self._relay_channels[msg.channel_uuid] = (sender_key, next_node.pub_key)
             self._sync_send(msg, next_node.pub_key)
 
-    def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key):
+    def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
         elif receiver_type == ConnectionType.relay:
             self._sync_send(msg, self._relay_channels[msg.channel_id][0])
 
-    def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer]):
+    def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
         receiver_type = self.check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg)
+            self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             self._sync_send(msg, self._relay_channels[msg.channel_id][dir_idx])
@@ -163,14 +163,14 @@ class Connection:
 
         self._sync_send(conn_request)
 
-    def on_end_node_found(self, en):
+    def on_end_node_found(self, en: Node):
         # Found an EN, now try to establish channels
         # TODO config
         for i in range(5):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
             # TODO channel_request.challenge = handshake.make_rsa_challenge() # TODO
-            channel_request.end_node = en
+            channel_request.end_node = en.toNodeTableEntry()
             channel_request.channel_uuid = channel_uuid
             # TODO channel_request.original_sender_signature = raise NotImplementedError()
 
@@ -183,7 +183,7 @@ class Connection:
                 # TODO how do we know what exceptions are raised when there's a failure?
                 callback(None)
 
-    def on_payload_received(self, msg: bfcp_pb2.ToOriginalSender):
+    def on_payload_received(self, msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
         if not isinstance(msg, bfcp_pb2.ToOriginalSender):
             # TODO panic this should not happen
             return
