@@ -102,7 +102,7 @@ class TrafficManager:
                     self._serving_host[0], self._serving_host[1], loop=self._async_loop)
             )
 
-    async def send(self, pub_key: RsaKey, msg: BouncyMessage) -> None:
+    async def send(self, msg: BouncyMessage, pub_key: RsaKey) -> None:
         """
         Sends the provided BouncyMessage to the node in the network identified by the given public
         key. It's also possible to send a message to the node itself.

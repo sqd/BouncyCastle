@@ -106,7 +106,7 @@ class ConnectionManager:
             self._sync_send(msg, self._relay_channels[msg.channel_id][dir_idx])
 
     def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[RsaKey] = None):
-        ensure_future(self._traffic_manager.send(pub_key, msg))
+        ensure_future(self._traffic_manager.send(msg, pub_key))
 
 
 class Connection:
@@ -259,7 +259,7 @@ class Connection:
         self._on_closed.remove(callback)
 
     def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
-        ensure_future(self._traffic_manager.send(pub_key, msg))
+        ensure_future(self._traffic_manager.send(msg, pub_key))
 
 
 class SocketConnection:

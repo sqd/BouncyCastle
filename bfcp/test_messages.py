@@ -128,16 +128,16 @@ class TestMessages(unittest.TestCase):
             nonlocal node2_messages
             nonlocal node3_messages
 
-            await node1_manager.send(node2_rsa_key.publickey(), msg1)
+            await node1_manager.send(msg1, node2_rsa_key.publickey())
 
-            await node2_manager.send(node3_rsa_key.publickey(), msg2)
+            await node2_manager.send(msg2, node3_rsa_key.publickey())
             node3_messages.extend(await node3_manager.new_messages())
 
-            await node3_manager.send(node1_rsa_key.publickey(), msg3)
+            await node3_manager.send(msg3, node1_rsa_key.publickey())
             node1_messages.extend(await node1_manager.new_messages())
 
-            await node1_manager.send(node3_rsa_key.publickey(), msg4)
-            await node2_manager.send(node1_rsa_key.publickey(), msg5)
+            await node1_manager.send(msg4, node3_rsa_key.publickey())
+            await node2_manager.send(msg5, node1_rsa_key.publickey())
 
             node1_messages.extend(await node1_manager.new_messages())
             node2_messages.extend(await node2_manager.new_messages())
