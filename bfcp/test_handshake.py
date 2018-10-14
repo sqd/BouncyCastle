@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 from Crypto.PublicKey import RSA
@@ -23,40 +24,47 @@ class TestHandshake(unittest.TestCase):
         self.assertEqual(handshake.proto_to_pubkey(handshake.pubkey_to_proto(key)), key)
 
     def test_handshake(self):
-        peer1_rsa = RSA.generate(2048)
-        peer2_rsa = RSA.generate(2048)
+        client_rsa = RSA.generate(2048)
+        server_rsa = RSA.generate(2048)
 
-        peer1_serving_port = None
-        peer2_serving_port = 1234
+        serving_port = 41142
 
-        messages_for_peer1 = []
-        messages_for_peer2 = []
+        client_handshake = None
+        server_handshake = None
 
-        peer1_handshake = handshake.PeerHandshake(peer1_rsa, peer1_serving_port,
-                                                  lambda msg: messages_for_peer2.append(msg))
-        peer2_handshake = handshake.PeerHandshake(peer2_rsa, peer2_serving_port,
-                                                  lambda msg: messages_for_peer1.append(msg))
+        async def server_handle_connection(reader, writer):
+            nonlocal server_handshake
+            
+            server_handshake = handshake.PeerHandshake(reader, writer, server_rsa, serving_port)
+            await server_handshake.execute()
 
-        while not (messages_for_peer1 == [] and messages_for_peer2 == []):
-            for msg in messages_for_peer1:
-                peer1_handshake.handle_message(msg.SerializeToString())
-            messages_for_peer1 = []
+        loop = asyncio.get_event_loop()
+        server = loop.run_until_complete(
+            asyncio.start_server(server_handle_connection, '127.0.0.1', serving_port, loop=loop)
+        )
 
-            for msg in messages_for_peer2:
-                peer2_handshake.handle_message(msg.SerializeToString())
-            messages_for_peer2 = []
+        async def client_scenario():
+            nonlocal client_handshake
+            
+            reader, writer = await asyncio.open_connection('127.0.0.1', serving_port)
+            client_handshake = handshake.PeerHandshake(reader, writer, client_rsa, None)
+            await client_handshake.execute()
+            writer.close()
 
-        self.assertTrue(peer1_handshake.complete)
-        self.assertTrue(peer2_handshake.complete)
+        loop.run_until_complete(client_scenario())
 
-        self.assertIsNotNone(peer1_handshake.session_key)
-        self.assertEqual(peer1_handshake.session_key, peer2_handshake.session_key)
+        server.close()
+        loop.run_until_complete(server.wait_closed())
+        loop.close()
 
-        self.assertEqual(peer1_handshake.peer_pub_key, peer2_rsa.publickey())
-        self.assertEqual(peer2_handshake.peer_pub_key, peer1_rsa.publickey())
+        self.assertIsNotNone(client_handshake.session_key)
+        self.assertEqual(client_handshake.session_key, server_handshake.session_key)
 
-        self.assertEqual(peer1_handshake.peer_serving_port, peer2_serving_port)
-        self.assertEqual(peer2_handshake.peer_serving_port, peer1_serving_port)
+        self.assertEqual(client_handshake.peer_pub_key, server_rsa.publickey())
+        self.assertEqual(server_handshake.peer_pub_key, client_rsa.publickey())
+
+        self.assertEqual(client_handshake.peer_serving_port, serving_port)
+        self.assertEqual(server_handshake.peer_serving_port, None)
 
 
 if __name__ == '__main__':

@@ -1,3 +1,4 @@
+from asyncio import StreamReader, StreamWriter
 from typing import Tuple, Callable, Optional
 
 from Crypto.Cipher import PKCS1_OAEP
@@ -6,7 +7,7 @@ from Crypto.Random import get_random_bytes
 from google.protobuf.message import Message
 
 from protos.bfcp_pb2 import RsaChallenge, RsaChallengeResponse, RsaPubKey, PeerHello, AESKey
-from utils import generate_aes_key
+from utils import generate_aes_key, send_proto_msg, recv_proto_msg
 
 CHALLENGE_SIZE = 64
 
@@ -43,6 +44,7 @@ def _int_to_bytes(n: int) -> bytes:
     return n.to_bytes(max(1, (n.bit_length() + 7) // 8), 'big')
 
 
+# TODO(mike): Move the following 3 methods to utils
 def pubkey_to_proto(key: RsaKey) -> RsaPubKey:
     """
     Converts the given RSA Key into an RsaPubKey proto message.
@@ -51,6 +53,10 @@ def pubkey_to_proto(key: RsaKey) -> RsaPubKey:
     message.modulus = _int_to_bytes(key.n)
     message.pub_exponent = _int_to_bytes(key.e)
     return message
+
+
+def pubkey_to_deterministic_string(key: RsaKey) -> bytes:
+    return pubkey_to_proto(key).SerializeToString()
 
 
 def proto_to_pubkey(key: RsaPubKey) -> RsaKey:
@@ -87,27 +93,21 @@ class PeerHandshake:
     * The AES key is used for all further communication.
     """
 
-    def __init__(self, own_rsa_key: RsaKey, own_serving_port: Optional[int],
-                 on_send_message: Callable[[Message], None]):
+    def __init__(self, reader: StreamReader, writer: StreamWriter, own_rsa_key: RsaKey,
+                 own_serving_port: Optional[int]):
         """
         :param own_rsa_key: The RSA key of this node
         :param own_serving_port: The serving port of this node. If this node is not serving, this
         should be set to None
-        :param on_send_message: Throughout the execution of the handshake, this class will send
-        messages to the peer. This callback should send protobuf messages to the peer.
         """
+        self._writer = writer
+        self._reader = reader
         self._own_serving_port = own_serving_port
+
         self.own_rsa_key = own_rsa_key
         self.peer_pub_key: Optional[RsaKey] = None
         self.peer_serving_port: Optional[int] = None
         self.session_key: Optional[bytes] = None
-        self.complete = False
-
-        self._decrypted_challenge = None
-
-        self._state = 'wait_for_hello'
-        self._send_message = on_send_message
-        self._send_message(self._make_hello())
 
     def _make_hello(self) -> PeerHello:
         hello = PeerHello()
@@ -119,42 +119,35 @@ class PeerHandshake:
     def _is_key_smaller_than(k1, k2) -> bool:
         return k1.n < k2.n or (k1.n == k2.n and k1.e < k2.e)
 
-    def handle_message(self, message_bytes: bytes):
-        if self._state == 'wait_for_hello':
-            peer_hello = PeerHello()
-            peer_hello.ParseFromString(message_bytes)
-            self.peer_pub_key = proto_to_pubkey(peer_hello.pub_key)
-            self.peer_serving_port = \
-                peer_hello.serving_port if peer_hello.serving_port > 0 else None
+    async def execute(self):
+        await send_proto_msg(self._writer, self._make_hello())
 
-            self._decrypted_challenge, challenge = make_rsa_challenge(self.peer_pub_key)
-            self._send_message(challenge)
+        peer_hello = PeerHello()
+        await recv_proto_msg(self._reader, peer_hello)
+        self.peer_pub_key = proto_to_pubkey(peer_hello.pub_key)
+        self.peer_serving_port = \
+            peer_hello.serving_port if peer_hello.serving_port > 0 else None
 
-            self._state = 'wait_challenge'
-        elif self._state == 'wait_challenge':
-            rsa_challenge = RsaChallenge()
-            rsa_challenge.ParseFromString(message_bytes)
-            self._send_message(solve_rsa_challenge(self.own_rsa_key, rsa_challenge))
+        decrypted_challenge, challenge = make_rsa_challenge(self.peer_pub_key)
+        await send_proto_msg(self._writer, challenge)
 
-            self._state = 'wait_challenge_solution'
-        elif self._state == 'wait_challenge_solution':
-            solved_challenge = RsaChallengeResponse()
-            solved_challenge.ParseFromString(message_bytes)
-            if not verify_rsa_challenge(self._decrypted_challenge, solved_challenge):
-                raise ConnectionError('RSA challenge solved incorrectly')
+        rsa_challenge = RsaChallenge()
+        await recv_proto_msg(self._reader, rsa_challenge)
+        await send_proto_msg(self._writer, solve_rsa_challenge(self.own_rsa_key, rsa_challenge))
 
-            if self._is_key_smaller_than(self.own_rsa_key, self.peer_pub_key):
-                self.session_key = generate_aes_key(PEER_CONNECTION_KEY_SIZE)
-                self._send_message(AESKey(key=self.session_key))
-                self._state = 'established'
-                self.complete = True
-            else:
-                self._state = 'wait_sess_key'
-        elif self._state == 'wait_sess_key':
-            key_message = AESKey()
-            key_message.ParseFromString(message_bytes)
-            self.session_key = key_message.key
-            self._state = 'established'
-            self.complete = True
+        solved_challenge = RsaChallengeResponse()
+        await recv_proto_msg(self._reader, solved_challenge)
+        if not verify_rsa_challenge(decrypted_challenge, solved_challenge):
+            raise ConnectionError('RSA challenge solved incorrectly')
+
+        if self._is_key_smaller_than(self.own_rsa_key, self.peer_pub_key):
+            self.session_key = generate_aes_key(PEER_CONNECTION_KEY_SIZE)
+
+            cipher_rsa = PKCS1_OAEP.new(self.peer_pub_key)
+            await send_proto_msg(self._writer, AESKey(key=cipher_rsa.encrypt(self.session_key)))
         else:
-            raise ValueError('Incorrect handshake state', self._state)
+            key_message = AESKey()
+            await recv_proto_msg(self._reader, key_message)
+
+            cipher_rsa = PKCS1_OAEP.new(self.own_rsa_key)
+            self.session_key = cipher_rsa.decrypt(key_message.key)
