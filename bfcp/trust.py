@@ -169,7 +169,7 @@ class TrustTableManager:
 
     @staticmethod
     def _parse_initial_node_table(initial_node_table: bfcp_pb2.NodeTable)\
-            -> RandomDict[RsaKey, bfcp_pb2.NodeTableEntry]:
+            -> Dict[RsaKey, bfcp_pb2.NodeTableEntry]:
         result = RandomDict()
         for entry in initial_node_table.entries:
             pub_key = proto_to_pubkey(entry.node.public_key)
