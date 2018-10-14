@@ -2,10 +2,11 @@
 import asyncio
 from typing import Tuple
 
+from Crypto.PublicKey.RSA import RsaKey
 import protos.bfcp_pb2 as bfcp_pb2
 
 from bfcp.messages import TrafficManager
-from bfcp.trust import TrustTableManager
+from bfcp.trust import TrustTableManager, SendNodeTableTask, MergeNodeTableTask
 from bfcp.connection import ConnectionManager, Connection
 
 
@@ -27,18 +28,24 @@ class BFCNode:
         """
         return self.connection_manager.new_connection(en_requirement, addr)
 
-    async def handle_message(self, msg, sender_key):
-        if isinstance(msg, bfcp_pb2.ConnectionResponse):
+    async def handle_message(self, msg: bfcp_pb2.BouncyMessage, sender_key: RsaKey):
+        if isinstance(msg, bfcp_pb2.ConnectionRequest):
+            self.connection_manager.on_conn_request(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.ConnectionResponse):
             self.connection_manager.on_conn_response(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.ChannelRequest):
+            self.connection_manager.on_channel_request(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.ChannelResponse):
             self.connection_manager.on_channel_response(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.ToOriginalSender):
-            self.connection_manager.on_payload_received(msg)
-        # we're helping out other people below this line
-        elif isinstance(msg, bfcp_pb2.ToTargetServer):
-            pass
-        elif isinstance(msg, bfcp_pb2.ToTargetServer):
-            pass
+        elif isinstance(msg, (bfcp_pb2.ToTargetServer, bfcp_pb2.ToOriginalSender)):
+            self.connection_manager.on_payload_received(msg, sender_key)
+        elif isinstance(msg, bfcp_pb2.DiscoveryRequest):
+            self.trust_table_manager.add_task(SendNodeTableTask(sender_key))
+        elif isinstance(msg, bfcp_pb2.NodeTable):
+            self.trust_table_manager.add_task(MergeNodeTableTask(sender_key, msg))
+        elif isinstance(msg, bfcp_pb2.CloseConnectionRequest):
+            # TODO
+            raise NotImplementedError()
 
     def run(self)->None:
         """
