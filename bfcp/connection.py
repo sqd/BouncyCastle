@@ -1,9 +1,9 @@
 import threading
-from typing import Callable, List, Tuple, Dict, Union, Optional
+from typing import Callable, List, Tuple, Dict, Union, Optional, Set
 from enum import Enum, auto
 from random import randint
 from uuid import uuid4
-from asyncio import ensure_future
+from asyncio import ensure_future, open_connection
 
 from Crypto.Cipher import PKCS1_OAEP
 from Crypto.Hash import SHA256
@@ -17,7 +17,7 @@ from Crypto.PublicKey.RSA import RsaKey
 from bfcp.handshake import pubkey_to_proto, proto_to_pubkey
 from bfcp.messages import TrafficManager, NodeNotFoundError
 from bfcp.node import BFCNode
-from bfcp.trust import TrustTableManager
+from bfcp.trust import TrustTableManager, Node
 import utils
 
 
@@ -40,6 +40,7 @@ MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT = MIN_CHANNEL_LENGTH * (2/3)
 class ConnectionType(Enum):
     origin = auto()
     relay = auto()
+    end = auto()
     neither = auto()
 
 
@@ -48,8 +49,9 @@ class ConnectionManager:
         #: Connections that originated from this node. uuid(str) -> OriginalSenderConnection
         self._os_conn: Dict[str, OriginalSenderConnection] = dict()
 
-        #: Connections for which this node is the end node. uuid(str) -> EndNodeConnection
-        self._en_conn: Dict[str, EndNodeConnection] = dict()
+        #: Connections for which this node is the end node.
+        # uuid(str) -> (EndNodeConnection, set of (prev channel uuid, prev channel hop))
+        self._en_conn: Dict[str, Tuple[EndNodeConnection, Set[Tuple[str, RsaKey]]]] = dict()
 
         #: Connection requests that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_conn_requests: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
@@ -70,6 +72,8 @@ class ConnectionManager:
             return ConnectionType.origin
         elif conn_uuid in self._relay_conn_requests:
             return ConnectionType.relay
+        elif conn_uuid in self._en_conn:
+            return ConnectionType.end
         else:
             return ConnectionType.neither
 
@@ -112,8 +116,15 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
-        if self._check_conn_type(msg.channel_uuid) == ConnectionType.neither:
-            next_node = self._trust_table.get_random_node()
+        if Node.from_node_table_entry(msg.end_node).pub_key == self._bfc_node.pub_key:
+            # I am the end node
+            self._en_conn[msg.routing_params.connection_uuid][1].add((msg.channel_uuid, sender_key))
+        elif self._check_conn_type(msg.routing_params.connection_uuid) == ConnectionType.neither:
+            msg.connection_params.remaining_hops -= 1
+            next_node = self._trust_table.get_random_node() \
+                if msg.connection_params.remaining_hops > 0 \
+                else Node.from_node_table_entry(msg.end_node)
+
             self._relay_channels[msg.channel_uuid] = (sender_key, next_node.pub_key)
             await self._traffic_manager.send(msg, next_node.pub_key)
 
@@ -122,7 +133,7 @@ class ConnectionManager:
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
         elif receiver_type == ConnectionType.relay:
-            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][0])
+            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_uuid][0])
 
     async def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
@@ -131,8 +142,13 @@ class ConnectionManager:
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][dir_idx])
+        elif receiver_type == ConnectionType.end:
+            self._en_conn[msg.channel_id.connection_uuid][0].send(msg.payload)
 
     async def _become_end_node(self, conn_request: bfcp_pb2.ConnectionRequest, sender_key: RsaKey):
+        """
+        Respond to a ConnectionRequest, saying that "I'll be the end node". And prepare to be one.
+        """
         # solve the challenge
         solved_challenge = pkcs1_15.new(self._bfc_node.rsa_key).sign(
             conn_request.signature_challenge)
@@ -154,12 +170,43 @@ class ConnectionManager:
         encrypted_session_key = cipher_rsa.encrypt(session_key)
         conn_resp.session_key.key = encrypted_session_key
 
-        self._en_conn[conn_resp.uuid] = EndNodeConnection()
+        prev_hops = set()
+        en_conn = EndNodeConnection(self._traffic_manager,
+                                    conn_request.routing_params.uuid,
+                                    conn_request.channel_uuid,
+                                    prev_hops)
+        self._en_conn[conn_request.routing_params.uuid] = (en_conn, prev_hops)
+        en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port))
+
         await self._traffic_manager.send(conn_resp)
 
 
 class EndNodeConnection:
-    raise NotImplementedError()
+    def __init__(self, tm: TrafficManager, conn_uuid: str, channel_uuid: str, prev_hops: Set[Tuple[str, RsaKey]]):
+        self._traffic_manager = tm
+        self._conn_uuid = conn_uuid
+        self._channel_uuid = channel_uuid
+        self._prev_hops = prev_hops
+        self._reader = None
+        self._writer = None
+
+    def initiate_connection(self, addr: Tuple[str, int]):
+        self._reader, self._writer = ensure_future(open_connection(*addr))
+
+    def on_recv(self, data: bytes):
+        # Send the data back to the OS
+        msg = bfcp_pb2.ToOriginalSender()
+        msg.channel_id.connection_uuid = self._conn_uuid
+        for (uuid, key) in self._prev_hops:
+            msg.channel_id.channel_uuid = uuid
+            self._traffic_manager.send(msg, key)
+
+    def send(self, data: bytes):
+        # TODO Mike help
+        await self._writer
+        self._writer.write(data)
+
+    # TODO Mike help how to I listen for data on self._reader
 
 
 class OriginalSenderConnection:
