@@ -88,7 +88,7 @@ def test_content_length_body_partial_input(s):
     mock_header = Mock(headers={b'Content-Length': (0, str(len(HTTP_10_GET())).encode('ascii'))})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
-    assert parser.feed(s) == http_parser.HTTPParseStatus.PARTIAL
+    assert parser.feed(s) == HTTPParseStatus.PARTIAL
 
 
 def test_chunked_body_happy_case():
@@ -96,8 +96,25 @@ def test_chunked_body_happy_case():
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CHUNKED
 
-    # s = b'4\r\nWiki\r\n5\r\npedia\r\nE\r\nin\r\n\r\nchunks.\r\n0\r\n\r\n'
     extra = b'extra extra'
     s = b'4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n'
     rst = parser.feed(s+extra)
     assert rst == len(s)
+
+
+def test_chunked_body_error_case():
+    mock_header = Mock(version=b'HTTP/1.1', headers={b'Content-Encoding': b'chunked'})
+    parser = HTTPBodyParser(mock_header)
+
+    s = b'4\r\nWiki\r\n5\r\npedia\r\nE error\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n'
+    rst = parser.feed(s)
+    assert rst == HTTPParseStatus.ERROR
+
+
+@pytest.mark.parametrize("s", list(partial_inputs(b'4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n')))
+def test_chunked_body_partial_input(s):
+    mock_header = Mock(version=b'HTTP/1.1', headers={b'Content-Encoding': b'chunked'})
+    parser = HTTPBodyParser(mock_header)
+
+    rst = parser.feed(s)
+    assert rst == HTTPParseStatus.PARTIAL
