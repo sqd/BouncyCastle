@@ -6,6 +6,7 @@ from Crypto.PublicKey.RSA import RsaKey
 import protos.bfcp_pb2 as bfcp_pb2
 
 from bfcp.messages import TrafficManager
+from bfcp.protocol import matches_requirements
 from bfcp.trust import TrustTableManager, SendNodeTableTask, MergeNodeTableTask
 from bfcp.connection import ConnectionManager, OriginalSenderConnection
 
@@ -15,11 +16,12 @@ class BFCNode:
     """
     A BFCNode.
     """
-    def __init__(self, host: Optional[Tuple[str, int]], rsa_key: RsaKey):
+    def __init__(self, self_node: bfcp_pb2.Node, host: Optional[Tuple[str, int]], rsa_key: RsaKey, node_table: bfcp_pb2.NodeTable):
+        self._self_node = self_node
         self._async_loop = asyncio.get_event_loop()
 
         self.traffic_manager = TrafficManager(self, rsa_key, self._async_loop, host)
-        self.trust_table_manager = TrustTableManager(self, bfcp_pb2.NodeTable()) # TODO load table
+        self.trust_table_manager = TrustTableManager(self, node_table)
         self.trust_table_manager.run()
         self.connection_manager = ConnectionManager(self)
 
@@ -68,8 +70,6 @@ class BFCNode:
             self._async_loop.close()
 
     def meets_requirements(self, end_node_requirement: bfcp_pb2.EndNodeRequirement) -> bool:
-        return True
-        '''
-        return false if not running a server node
-        raise NotImplementedError
-        '''
+        if self.host is None:
+            return False
+        return matches_requirements(self._self_node, end_node_requirement)

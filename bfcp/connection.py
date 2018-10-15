@@ -16,8 +16,6 @@ from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.protocol import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
-from bfcp.node import BFCNode
-from bfcp.trust import TrustTableManager
 import utils
 
 from config import *
@@ -354,7 +352,7 @@ class OriginalSenderConnection:
         Sends the specified data to the target server. This is a non-blocking call
         """
         if data != b'':
-            asyncio.ensure_future(self._send_internal(data))
+            self._traffic_manager.get_loop().call_soon_threadsafe(self._send_internal(data))
 
     def close(self):
         """
@@ -408,7 +406,7 @@ class OriginalSenderConnection:
         self._on_closed.remove(callback)
 
     def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
-        ensure_future(self._traffic_manager.send(msg, pub_key))
+        self._traffic_manager.get_loop().call_soon_threadsafe(self._traffic_manager.send(msg, pub_key))
 
     def _make_channel_length(self):
         return randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])

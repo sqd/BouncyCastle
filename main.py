@@ -32,8 +32,8 @@ def main():
     http_proxy = HTTPProxyServer(http_proxy_default_config, bfc, ev_server)
     http_proxy.start()
 
-    ev_server.start()
     _log.info("(Proxy) Epoll event looping...")
+    ev_server.start()
 
 
 if __name__ == "__main__":
