@@ -194,3 +194,6 @@ class TrafficManager:
 
     def close(self):
         self._server.close()
+
+    def get_loop(self) -> asyncio.AbstractEventLoop:
+        return self._async_loop
