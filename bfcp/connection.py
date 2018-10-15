@@ -89,7 +89,7 @@ class ConnectionManager:
             else:
                 node = self._trust_table.get_node_with_requirement(msg.end_node_requirement)
                 if node is None:
-                    if remaining_hops < -MAX_HOPS_WITHOUT_END_NODE:
+                    if remaining_hops < -GLOBAL_VARS['MAX_HOPS_WITHOUT_END_NODE']:
                         raise NodeNotFoundError('A node suitable for becoming EN was not found')
                     else:
                         await send_randomly()
@@ -152,7 +152,7 @@ class ConnectionManager:
         conn_resp.signature_challenge_response = solved_challenge
 
         # Prepare the session key
-        session_key = utils.generate_aes_key(OS_EN_KEY_SIZE)
+        session_key = utils.generate_aes_key(GLOBAL_VARS['OS_EN_KEY_SIZE'])
 
         original_sender_pub_key = proto_to_pubkey(conn_request.sender_connection_key)
         cipher_rsa = PKCS1_OAEP.new(original_sender_pub_key)
@@ -242,8 +242,8 @@ class OriginalSenderConnection:
         self.uuid: str = str(uuid4())
 
         # Encryption:
-        self._sender_connection_key: RsaKey = RSA.generate(SENDER_CONNECTION_KEY_BITS)
-        self._challenge_bytes: bytes = get_random_bytes(SIGNATURE_CHALLENGE_BYTES)
+        self._sender_connection_key: RsaKey = RSA.generate(GLOBAL_VARS['SENDER_CONNECTION_KEY_BITS'])
+        self._challenge_bytes: bytes = get_random_bytes(GLOBAL_VARS['SIGNATURE_CHALLENGE_BYTES'])
         self._session_key: Optional[bytes] = None
 
     def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
@@ -255,7 +255,7 @@ class OriginalSenderConnection:
         conn_request = bfcp_pb2.ConnectionRequest()
 
         conn_request.conn_params.uuid = self.uuid
-        conn_request.conn_params.remaining_hops = randint(MIN_CHANNEL_LENGTH, MAX_CHANNEL_LENGTH)
+        conn_request.conn_params.remaining_hops = randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
 
         conn_request.end_node_requirement.CopyFrom(en_requirement)
         conn_request.target_server_address = ts_address[0]
@@ -280,7 +280,7 @@ class OriginalSenderConnection:
         self._session_key = rsa_cipher.decrypt(conn_resp.session_key.key)
 
         # Found an EN, now try to establish channels
-        for i in range(CHANNELS_PER_CONNECTION):
+        for i in range(GLOBAL_VARS['CHANNELS_PER_CONNECTION']):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
             channel_request.end_node.CopyFrom(conn_resp.selected_end_node)
@@ -296,7 +296,7 @@ class OriginalSenderConnection:
 
         self._channels.append((channel_uuid, next_hop_pub_key))
         if (not self._establish_event_fired) and \
-                len(self._channels) >= MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT:
+                len(self._channels) >= GLOBAL_VARS['MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT']:
             self._establish_event_fired = True
             for callback in self._on_established:
                 # TODO how do we know what exceptions are raised when there's a failure?
@@ -412,7 +412,7 @@ class OriginalSenderConnection:
         ensure_future(self._traffic_manager.send(msg, pub_key))
 
     def _make_channel_length(self):
-        return randint(MIN_CHANNEL_LENGTH, MAX_CHANNEL_LENGTH)
+        return randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
 
     def _close_internal(self):
         if self._is_closed:

@@ -24,7 +24,7 @@ def make_rsa_challenge(challenged_pub_key: RsaKey) -> Tuple[bytes, RsaChallenge]
         solved = handshake.solve_rsa_challenge(key, challenge)
         self.assertTrue(handshake.verify_rsa_challenge(decrypted, solved))
     """
-    decrypted = get_random_bytes(CHALLENGE_SIZE)
+    decrypted = get_random_bytes(GLOBAL_VARS['CHALLENGE_SIZE'])
     cipher_rsa = PKCS1_OAEP.new(challenged_pub_key)
     encrypted = cipher_rsa.encrypt(decrypted)
 

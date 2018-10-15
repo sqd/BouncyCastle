@@ -49,7 +49,7 @@ class BfcpSocketHandler:
         await self._handshake_task
 
         msg = BouncyMessage()
-        await recv_proto_msg(self._reader, msg, MAX_MESSAGE_LENGTH, self._handshake.session_key)
+        await recv_proto_msg(self._reader, msg, GLOBAL_VARS['MAX_MESSAGE_LENGTH'], self._handshake.session_key)
         return msg
 
     async def send_bouncy_message(self, msg: BouncyMessage):
