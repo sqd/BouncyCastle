@@ -17,17 +17,17 @@ class TestMessages(unittest.TestCase):
         # Set up the nodes in the network
         node1_port = 53251
         node1_rsa_key = RSA.generate(2048)
-        node1_manager = TrafficManager(trust_table_manager, node1_rsa_key, loop,
+        node1_manager = TrafficManager(Mock(trust_table_manager=trust_table_manager), node1_rsa_key, loop,
                                        ('127.0.0.1', node1_port))
 
         node2_port = 53252
         node2_rsa_key = RSA.generate(2048)
-        node2_manager = TrafficManager(trust_table_manager, node2_rsa_key, loop,
+        node2_manager = TrafficManager(Mock(trust_table_manager=trust_table_manager), node2_rsa_key, loop,
                                        ('127.0.0.1', node2_port))
 
         node3_port = 53253
         node3_rsa_key = RSA.generate(2048)
-        node3_manager = TrafficManager(trust_table_manager, node3_rsa_key, loop,
+        node3_manager = TrafficManager(Mock(trust_table_manager=trust_table_manager), node3_rsa_key, loop,
                                        ('127.0.0.1', node3_port))
 
         # Prepare messages for sending
