@@ -106,7 +106,7 @@ class HTTPBodyParser:
         if self._encoding == HTTPBodyEncoding.NONE:
             return HTTPParseStatus.PARTIAL
         elif self._encoding == HTTPBodyEncoding.CONTENT_LENGTH:
-            if len(s) > self._content_length:
+            if len(s) >= self._content_length:
                 return self._content_length
             else:
                 self._content_length -= len(s)

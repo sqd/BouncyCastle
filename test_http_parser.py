@@ -67,7 +67,7 @@ def random_bytes(*args):
 
 @pytest.mark.parametrize("s", list(random_bytes()))
 def test_content_length_body_happy_case(s):
-    mock_header = Mock(headers={b'Content-Length': str(len(s)).encode('ascii')})
+    mock_header = Mock(headers={b'Content-Length': (0, str(len(s)).encode('ascii'))})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
     assert parser._content_length == len(s)
@@ -76,7 +76,7 @@ def test_content_length_body_happy_case(s):
 
 @pytest.mark.parametrize("s", list(random_bytes()))
 def test_content_length_body_happy_case(s):
-    mock_header = Mock(headers={b'Content-Length': str(len(s)).encode('ascii')})
+    mock_header = Mock(headers={b'Content-Length': (0, str(len(s)).encode('ascii'))})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
     assert parser._content_length == len(s)
@@ -85,8 +85,7 @@ def test_content_length_body_happy_case(s):
 
 @pytest.mark.parametrize("s", list(partial_inputs(HTTP_10_GET())))
 def test_content_length_body_partial_input(s):
-    mock_header = Mock(headers={b'Content-Length': str(len(s)).encode('ascii')})
+    mock_header = Mock(headers={b'Content-Length': (0, str(len(HTTP_10_GET())).encode('ascii'))})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
-    assert parser._content_length == len(s)
     assert parser.feed(s) == http_parser.HTTPParseStatus.PARTIAL
