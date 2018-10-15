@@ -88,10 +88,10 @@ def update_trust_score(node: bfcp_pb2.NodeTableEntry, src_trust_score: float, ne
 
 
 class TrustTableManager:
-    def __init__(self, initial_node_table: bfcp_pb2.NodeTable, traffic_manager: 'TrafficManager'):
+    def __init__(self, bfc: 'BFCNode', initial_node_table: bfcp_pb2.NodeTable):
         self._nodes = self._parse_initial_node_table(initial_node_table)
         self._task_queue = Queue()
-        self._traffic_manager = traffic_manager
+        self._bfc = bfc
         self._thread = Thread(target=self._loop())
 
         self._last_update_timestamp = 0
@@ -103,7 +103,7 @@ class TrustTableManager:
         # TODO config this
         for i in range(10):
             node = self.get_random_node()
-            self._traffic_manager.send(bfcp_pb2.DiscoveryRequest(), node.pub_key)
+            self._bfc.traffic_manager.send(bfcp_pb2.DiscoveryRequest(), node.pub_key)
             self._wait_update_nodes.add(node.pub_key)
 
     def send_node_table(self, recipient: RsaKey):
@@ -111,7 +111,7 @@ class TrustTableManager:
         node_table_msg = bfcp_pb2.NodeTable()
         for key, node in self._nodes.items():
             node_table_msg.entries.append(node.to_node_table_entry(node))
-        self._traffic_manager.send(node_table_msg, recipient)
+        self._bfc.traffic_manager.send(node_table_msg, recipient)
 
     def merge_node_table(self, src: RsaKey, table: bfcp_pb2.NodeTable):
         src_key = pubkey_to_deterministic_string(src)
