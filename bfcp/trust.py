@@ -2,7 +2,7 @@
 TrustTableManager
 """
 from typing import Tuple, Dict, Optional, List, Set
-from queue import Queue
+from queue import Queue, Empty
 from threading import Thread
 from time import time
 
@@ -92,7 +92,7 @@ class TrustTableManager:
         self._nodes = self._parse_initial_node_table(initial_node_table)
         self._task_queue = Queue()
         self._bfc = bfc
-        self._thread = Thread(target=self._loop())
+        self._thread = Thread(target=self._loop)
 
         self._last_update_timestamp = 0
         #: the set of nodes that we are waiting for update from
@@ -162,8 +162,11 @@ class TrustTableManager:
 
     def _loop(self):
         while True:  # TODO maybe have an exit signal for faster ctrl-c
-            task: TrustTableManagerTask = self._task_queue.get(True, 10)  # TODO config timeout
-            task.run(self)
+            try:
+                task: TrustTableManagerTask = self._task_queue.get(True, 10)  # TODO config timeout
+                task.run(self)
+            except Empty:
+                pass
             if time() - self._last_update_timestamp >= 10:  # TODO config
                 self.add_task(UpdateNodeTableTask())
 
