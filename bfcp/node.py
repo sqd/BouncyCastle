@@ -17,11 +17,10 @@ class BFCNode:
     def __init__(self, host: Optional[Tuple[str, int]], rsa_key: RsaKey):
         self._async_loop = asyncio.get_event_loop()
 
-        self.trust_table_manager = TrustTableManager(self)
+        self.traffic_manager = TrafficManager(self, rsa_key, self._async_loop, host)
+        self.trust_table_manager = TrustTableManager(self, bfcp_pb2.NodeTable()) # TODO load table
         self.trust_table_manager.run()
         self.connection_manager = ConnectionManager(self)
-        self.traffic_manager = TrafficManager(self.trust_table_manager, rsa_key, self._async_loop,
-                                              host)
 
         self.host = host
         self.rsa_key = rsa_key

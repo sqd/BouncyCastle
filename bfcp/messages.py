@@ -76,7 +76,7 @@ class TrafficManager:
     TrafficManager.run()  # never returns
     """
 
-    def __init__(self, trust_table_manager: TrustTableManager, own_rsa_key: RsaKey,
+    def __init__(self, bfc: 'BFCNode', own_rsa_key: RsaKey,
                  loop: asyncio.AbstractEventLoop, serving_host: Optional[Tuple[str, int]]=None,
                  max_clients=60, max_servers=60):
         self._async_loop = loop
@@ -84,7 +84,7 @@ class TrafficManager:
         self._own_rsa_key = own_rsa_key
         self._max_clients = max_clients
         self._max_servers = max_servers
-        self._trust_table_manager = trust_table_manager
+        self._bfc = bfc
         self._next_message_futures = set()
 
         # This will be used so that new_messages() can block if there are no sockets to listen to
@@ -106,7 +106,7 @@ class TrafficManager:
         key. It's also possible to send a message to the node itself.
         """
         if pub_key is None:
-            pub_key = self._trust_table_manager.get_random_node()
+            pub_key = self._bfc.traffic_manager.get_random_node()
         pub_key_index = pubkey_to_deterministic_string(pub_key)
         if pub_key_index in self._open_client_sockets:
             await self._open_client_sockets[pub_key_index].send_bouncy_message(msg)
@@ -114,7 +114,7 @@ class TrafficManager:
             await self._open_server_sockets[pub_key_index].send_bouncy_message(msg)
         else:
             # We need to form a new connection
-            node = self._trust_table_manager.get_node_by_pubkey(pub_key)
+            node = self._bfc.trust_table_manager.get_node_by_pubkey(pub_key)
             if node is None:
                 raise NodeNotFoundError('A node with the provided public key does not exist in the '
                                         'trust table')
