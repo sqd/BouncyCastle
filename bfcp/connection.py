@@ -16,7 +16,6 @@ from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.protocol import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
-from bfcp.node import BFCNode
 from bfcp.trust import TrustTableManager, Node
 import utils
 
@@ -31,7 +30,7 @@ class ConnectionType(Enum):
 
 
 class ConnectionManager:
-    def __init__(self, bfc_node: BFCNode):
+    def __init__(self, bfc_node: 'BFCNode'):
         self._bfc_node = bfc_node
         self._traffic_manager = bfc_node.traffic_manager
         self._trust_table = bfc_node.trust_table_manager
