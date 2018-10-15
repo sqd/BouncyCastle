@@ -96,16 +96,16 @@ class TrustTableManager:
         self._thread = Thread(target=self._loop)
 
         self._last_update_timestamp = 0
-        #: the set of nodes that we are waiting for update from
-        self._wait_update_nodes: Set[RsaKey] = set()
+        #: the set of nodes (listed by Rsa key) that we are waiting for update from
+        self._wait_update_nodes: Set[bytes] = set()
 
     def update_node_table(self):
         self._last_update_timestamp = time()
         # TODO config this
         for i in range(10):
             node = self.get_random_node()
-            self._bfc.traffic_manager.send(bfcp_pb2.DiscoveryRequest(), node.pub_key)
-            self._wait_update_nodes.add(node.pub_key)
+            self._bfc.traffic_manager.send(bfcp_pb2.DiscoveryRequest(), get_node_pub_key(node))
+            self._wait_update_nodes.add(pubkey_to_deterministic_string(get_node_pub_key(node)))
 
     def send_node_table(self, recipient: RsaKey):
         # TODO lock and dirty state

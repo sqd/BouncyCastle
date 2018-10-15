@@ -251,15 +251,15 @@ class OriginalSenderConnection:
         """
         conn_request = bfcp_pb2.ConnectionRequest()
 
-        conn_request.conn_params.uuid = self.uuid
-        conn_request.conn_params.remaining_hops = randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
+        conn_request.connection_params.uuid = self.uuid
+        conn_request.connection_params.remaining_hops = randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
 
         conn_request.end_node_requirement.CopyFrom(en_requirement)
         conn_request.target_server_address = ts_address[0]
         conn_request.target_server_port = ts_address[1]
 
-        conn_request.sender_connection_key = pubkey_to_proto(
-            self._sender_connection_key.publickey())
+        conn_request.sender_connection_key.CopyFrom(
+            pubkey_to_proto(self._sender_connection_key.publickey()))
         conn_request.signature_challenge = self._challenge_bytes
 
         self._sync_send(conn_request)
