@@ -10,7 +10,7 @@ from http_parser import HTTPHeaderParser, HTTPRequestHeader, HTTPParseStatus, HT
 from utils import Ref
 
 
-HTTP_10_GET = lambda: b"GET http://example.com/path?key=value HTTP/1.0\r\nHeader: header-val\r\n\r\n"
+def HTTP_10_GET(): return b"GET http://example.com/path?key=value HTTP/1.0\r\nHeader: header-val\r\n\r\n"
 
 
 def test_header_happy_case():
@@ -60,18 +60,23 @@ def random_strings(n=5, min_len=10, max_len=50):
         yield ''.join(random.choice(string.printable) for _ in range(length))
 
 
-@pytest.mark.parametrize("s", list(random_strings()))
+def random_bytes(*args):
+    for s in random_strings(*args):
+        yield s.encode('ascii')
+
+
+@pytest.mark.parametrize("s", list(random_bytes()))
 def test_content_length_body_happy_case(s):
-    mock_header = Mock(headers={b'Content-Length': str(len(s).encode('ascii'))})
+    mock_header = Mock(headers={b'Content-Length': str(len(s)).encode('ascii')})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
     assert parser._content_length == len(s)
     assert parser.feed(s) == len(s)
 
 
-@pytest.mark.parametrize("s", list(random_strings()))
+@pytest.mark.parametrize("s", list(random_bytes()))
 def test_content_length_body_happy_case(s):
-    mock_header = Mock(headers={b'Content-Length': str(len(s).encode('ascii'))})
+    mock_header = Mock(headers={b'Content-Length': str(len(s)).encode('ascii')})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
     assert parser._content_length == len(s)
@@ -80,7 +85,7 @@ def test_content_length_body_happy_case(s):
 
 @pytest.mark.parametrize("s", list(partial_inputs(HTTP_10_GET())))
 def test_content_length_body_partial_input(s):
-    mock_header = Mock(headers={b'Content-Length': str(len(s).encode('ascii'))})
+    mock_header = Mock(headers={b'Content-Length': str(len(s)).encode('ascii')})
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
     assert parser._content_length == len(s)
