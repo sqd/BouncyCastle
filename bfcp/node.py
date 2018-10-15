@@ -16,12 +16,12 @@ class BFCNode:
     """
     A BFCNode.
     """
-    def __init__(self, self_node: bfcp_pb2.Node, host: Optional[Tuple[str, int]], rsa_key: RsaKey):
+    def __init__(self, self_node: bfcp_pb2.Node, host: Optional[Tuple[str, int]], rsa_key: RsaKey, node_table: bfcp_pb2.NodeTable):
         self._self_node = self_node
         self._async_loop = asyncio.get_event_loop()
 
         self.traffic_manager = TrafficManager(self, rsa_key, self._async_loop, host)
-        self.trust_table_manager = TrustTableManager(self, bfcp_pb2.NodeTable()) # TODO load table
+        self.trust_table_manager = TrustTableManager(self, node_table)
         self.trust_table_manager.run()
         self.connection_manager = ConnectionManager(self)
 
