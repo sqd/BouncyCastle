@@ -352,7 +352,8 @@ class OriginalSenderConnection:
         Sends the specified data to the target server. This is a non-blocking call
         """
         if data != b'':
-            self._traffic_manager.get_loop().call_soon_threadsafe(self._send_internal(data))
+            asyncio.run_coroutine_threadsafe(self._send_internal(data),
+                                             self._traffic_manager.get_loop())
 
     def close(self):
         """
@@ -406,7 +407,8 @@ class OriginalSenderConnection:
         self._on_closed.remove(callback)
 
     def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
-        self._traffic_manager.get_loop().call_soon_threadsafe(self._traffic_manager.send(msg, pub_key))
+        asyncio.run_coroutine_threadsafe(self._traffic_manager.send(msg, pub_key),
+                                         self._traffic_manager.get_loop())
 
     def _make_channel_length(self):
         return randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
