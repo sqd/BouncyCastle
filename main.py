@@ -17,16 +17,23 @@ _log = getLogger(__name__)
 def main():
     http_proxy_default_config = HTTPProxyServerConfig([("127.0.0.1", 8080)])
 
-    bfc = BFCNode(("0.0.0.0", 9000), RSA.generate(2048))
-    Thread(target=bfc.run).start()
+    bfc = None
+
+    def run_bfc():
+        global bfc
+        bfc = BFCNode(("0.0.0.0", 9000), RSA.generate(2048))
+        bfc.run()
+
+    Thread(target=run_bfc).start()
+    _log.info("Started BFC")
 
     ev_server = EventServer()
 
     http_proxy = HTTPProxyServer(http_proxy_default_config, bfc, ev_server)
     http_proxy.start()
 
-    _log.info("Event looping...")
     ev_server.start()
+    _log.info("(Proxy) Epoll event looping...")
 
 
 if __name__ == "__main__":
