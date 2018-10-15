@@ -89,3 +89,15 @@ def test_content_length_body_partial_input(s):
     parser = HTTPBodyParser(mock_header)
     assert parser._encoding == http_parser.HTTPBodyEncoding.CONTENT_LENGTH
     assert parser.feed(s) == http_parser.HTTPParseStatus.PARTIAL
+
+
+def test_chunked_body_happy_case():
+    mock_header = Mock(version=b'HTTP/1.1', headers={b'Content-Encoding': b'chunked'})
+    parser = HTTPBodyParser(mock_header)
+    assert parser._encoding == http_parser.HTTPBodyEncoding.CHUNKED
+
+    # s = b'4\r\nWiki\r\n5\r\npedia\r\nE\r\nin\r\n\r\nchunks.\r\n0\r\n\r\n'
+    extra = b'extra extra'
+    s = b'4\r\nWiki\r\n5\r\npedia\r\nE\r\n in\r\n\r\nchunks.\r\n0\r\n\r\n'
+    rst = parser.feed(s+extra)
+    assert rst == len(s)

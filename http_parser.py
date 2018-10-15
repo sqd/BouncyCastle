@@ -87,7 +87,8 @@ class HTTPBodyParser:
                 # When chunk length is 0, this means we have just finished reading a chunk/fresh start.
                 # When chunk length is -1, this means we have started reading length, and are still waiting for length.
                 # When chunk length is -2, this means we have gotten \r for ending length, and are waiting for \n.
-                # When chunk length is -3, this means we have gotten \r for ending body, and are waiting for \n.
+                # When chunk length is -3, this means we have gotten 0-len for ending body, and are waiting for \r.
+                # When chunk length is -4, this means we have gotten 0-len and \r for ending body, and are waiting for \n.
                 # Otherwise, it's the remaining length of this chunk.
                 self._chunk_length = 0
             else:
@@ -113,16 +114,14 @@ class HTTPBodyParser:
                 return HTTPParseStatus.PARTIAL
         elif self._encoding == HTTPBodyEncoding.CHUNKED:
             for i in range(len(s)):
-                c = s[i]
+                c = s[i:i+1]
                 # Fresh start/just finished a chunk
+                print(self._chunk_length, c)
                 if self._chunk_length == 0:
                     # Ending body
-                    if c == b'\r':
-                        self._chunk_length = -3
                     # Treat as length
-                    else:
-                        self._len_buffer += c
-                        self._chunk_length = -1
+                    self._len_buffer += c
+                    self._chunk_length = -1
                 # In length
                 elif self._chunk_length == -1:
                     # Ending length
@@ -134,12 +133,21 @@ class HTTPBodyParser:
                 elif self._chunk_length == -2:
                     if c != b'\n':
                         return HTTPParseStatus.ERROR
-                    try:
-                        self._chunk_length = int(self._len_buffer) + 2  # 2 more \r\n
-                    except ValueError:
-                        return HTTPParseStatus.ERROR
+                    if self._len_buffer == b'0':
+                        self._chunk_length = -3
+                    else:
+                        try:
+                            self._chunk_length = int(self._len_buffer, 16) + 2  # 2 more \r\n
+                            self._len_buffer = b''
+                        except ValueError:
+                            return HTTPParseStatus.ERROR
                 # Waiting for \n for ending body
                 elif self._chunk_length == -3:
+                    if c != b'\r':
+                        return HTTPParseStatus.ERROR
+                    self._chunk_length = -4
+                # Waiting for \n for ending body
+                elif self._chunk_length == -4:
                     if c != b'\n':
                         return HTTPParseStatus.ERROR
                     else:
