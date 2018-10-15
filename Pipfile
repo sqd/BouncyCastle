@@ -8,6 +8,7 @@ protobuf = "*"
 randomdict = "*"
 pycryptodome = "*"
 pytest = "*"
+retrying = "*"
 
 [dev-packages]
 
