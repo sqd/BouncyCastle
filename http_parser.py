@@ -98,7 +98,9 @@ class HTTPBodyParser:
     def feed(self, s: bytes)->Union[HTTPParseStatus, int]:
         """
         Feed a byte string to the parser.
-        :return HTTPParseStatus.PARTIAL if more are expected; HTTPParseStatus.ERROR if an error occured; an integer n if only n characters are consumed, and the rest belongs to the next request.
+        :return HTTPParseStatus.PARTIAL if more are expected; HTTPParseStatus.ERROR
+        if an error occured; an integer n if only n characters are consumed, and the rest belongs to the next
+        request.
         :raises RuntimeError when called after a result has been returned.
         """
         if self._encoding == HTTPBodyEncoding.NONE:
