@@ -13,6 +13,7 @@ import protos.bfcp_pb2 as bfcp_pb2
 from bfcp.protocol import proto_to_pubkey, pubkey_to_deterministic_string, get_node_pub_key, \
     matches_requirements
 
+from config import *
 
 class TrustTableManagerTask:
     def run(self, tm: 'TrustTableManager') -> None:

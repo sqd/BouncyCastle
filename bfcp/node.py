@@ -9,6 +9,7 @@ from bfcp.messages import TrafficManager
 from bfcp.trust import TrustTableManager, SendNodeTableTask, MergeNodeTableTask
 from bfcp.connection import ConnectionManager, OriginalSenderConnection
 
+from config import *
 
 class BFCNode:
     """
