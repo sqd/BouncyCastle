@@ -75,7 +75,11 @@ class ConnectionManager:
 
         async def send_randomly():
             next_node = self._trust_table.get_random_node()
-            self._relay_conn_requests[msg.conn_uuid] = (sender_key, get_node_pub_key(next_node))
+            if msg.conn_uuid in self._relay_conn_requests:
+                (prev_node, _) = self._relay_conn_requests[msg.conn_uuid]
+                self._relay_conn_requests[msg.conn_uuid] = (prev_node, get_node_pub_key(next_node))
+            else:
+                self._relay_conn_requests[msg.conn_uuid] = (sender_key, get_node_pub_key(next_node))
             await self._traffic_manager.send(msg, get_node_pub_key(next_node))
 
         if remaining_hops > 0:
