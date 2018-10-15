@@ -16,8 +16,6 @@ from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.protocol import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
-from bfcp.node import BFCNode
-from bfcp.trust import TrustTableManager
 import utils
 
 from config import *
