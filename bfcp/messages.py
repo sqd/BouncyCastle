@@ -3,12 +3,13 @@ This module builds a layer of abstraction for sending and receiving information 
 BouncyMessages instead of raw TCP traffic.
 """
 import asyncio
+import threading
 from asyncio import StreamReader, StreamWriter
 from typing import Optional, Dict, Tuple, List
 
 from Crypto.PublicKey.RSA import RsaKey
 
-from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string
+from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string, pubkey_to_proto
 from bfcp.trust import TrustTableManager
 from protos.bfcp_pb2 import BouncyMessage
 
@@ -105,6 +106,10 @@ class TrafficManager:
         Sends the provided BouncyMessage to the node in the network identified by the given public
         key. It's also possible to send a message to the node itself.
         """
+        _log.debug('Sending message: %s\nTo: %s\nLogged by: %s\nThread: %d', str(msg),
+                   str(pubkey_to_proto(pub_key)),
+                   str(pubkey_to_proto(self._own_rsa_key.publickey())),
+                   threading.get_ident())
         if pub_key is None:
             pub_key = self._bfc.traffic_manager.get_random_node()
         pub_key_index = pubkey_to_deterministic_string(pub_key)
@@ -167,6 +172,11 @@ class TrafficManager:
             # retry
             return await self.new_messages()
         else:
+            for pub_key, msg in msgs:
+                _log.debug('Received message: %s\nFrom: %s\nLogged by: %s\nThread: %d', str(msg),
+                           str(pubkey_to_proto(pub_key)),
+                           str(pubkey_to_proto(self._own_rsa_key.publickey())),
+                           threading.get_ident())
             return msgs
 
     def _register_server_socket_handler(self, socket_handler: BfcpSocketHandler):
