@@ -68,5 +68,8 @@ class BFCNode:
             self._async_loop.close()
 
     def meets_requirements(self, end_node_requirement: bfcp_pb2.EndNodeRequirement) -> bool:
+        return True
+        '''
         return false if not running a server node
         raise NotImplementedError
+        '''
