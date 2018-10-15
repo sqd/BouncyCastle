@@ -16,6 +16,7 @@ from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.protocol import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
+from bfcp.node import BFCNode
 from bfcp.trust import TrustTableManager
 import utils
 
@@ -105,17 +106,16 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
-        if Node.from_node_table_entry(msg.end_node).pub_key == self._bfc_node.rsa_key:
+        if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key:
             # I am the end node
             self._en_conn[msg.routing_params.connection_uuid][1].add((msg.channel_uuid, sender_key))
         elif self._check_conn_type(msg.routing_params.connection_uuid) == ConnectionType.neither:
             msg.connection_params.remaining_hops -= 1
-            next_node = self._trust_table.get_random_node() \
-                if msg.connection_params.remaining_hops > 0 \
-                else Node.from_node_table_entry(msg.end_node)
+            next_node = self._trust_table.get_random_node().node \
+                if msg.connection_params.remaining_hops > 0 else msg.end_node
 
             self._relay_channels[msg.channel_uuid] = (sender_key, get_node_pub_key(next_node))
-            await self._traffic_manager.send(msg, get_node_pub_key(next_node))
+            await self._traffic_manager.send(msg, proto_to_pubkey(next_node.public_key))
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
@@ -170,7 +170,6 @@ class ConnectionManager:
             en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port)),
             self._traffic_manager.send(conn_resp)
         )
-
 
 
 class EndNodeConnection:
