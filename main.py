@@ -5,10 +5,11 @@ from threading import Thread
 from Crypto.PublicKey import RSA
 
 from bfcp.node import BFCNode
+from protos.bfcp_pb2 import Node, NodeTable
 
 from event_server import EventServer
 from http_proxy import HTTPProxyServer
-from config import HTTPProxyServerConfig
+from config import *
 
 
 from logger import getLogger
@@ -20,8 +21,11 @@ def main():
     bfc = None
 
     def run_bfc():
-        global bfc
-        bfc = BFCNode(("0.0.0.0", 9000), RSA.generate(2048))
+        nonlocal bfc
+        node = ProtoIO.read_from_file('node.txt', Node())
+        node_table = ProtoIO.read_from_file('node_table.txt', NodeTable())
+        # TODO: node.txt and node_table.txt are empty atm
+        bfc = BFCNode(node, ("0.0.0.0", 9000), RSA.generate(2048), node_table)
         bfc.run()
 
     Thread(target=run_bfc).start()
