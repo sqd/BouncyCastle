@@ -15,8 +15,9 @@ from bfcp.protocol import proto_to_pubkey, pubkey_to_deterministic_string, get_n
 
 from config import *
 
+
 class TrustTableManagerTask:
-    def run(self, tm: 'TrustTableManager') -> None:
+    async def run(self, tm: 'TrustTableManager') -> None:
         raise NotImplementedError()
 
 
@@ -24,8 +25,8 @@ class SendNodeTableTask(TrustTableManagerTask):
     def __init__(self, recipient: RsaKey):
         self._recipient = recipient
 
-    def run(self, tm: 'TrustTableManager') -> None:
-        tm.send_node_table(self._recipient)
+    async def run(self, tm: 'TrustTableManager') -> None:
+        await tm.send_node_table(self._recipient)
 
 
 class MergeNodeTableTask(TrustTableManagerTask):
@@ -33,13 +34,13 @@ class MergeNodeTableTask(TrustTableManagerTask):
         self._source = source
         self._table = table
 
-    def run(self, tm: 'TrustTableManager') -> None:
+    async def run(self, tm: 'TrustTableManager') -> None:
         tm.merge_node_table(self._source, self._table)
 
 
 class UpdateNodeTableTask(TrustTableManagerTask):
-    def run(self, tm: 'TrustTableManager') -> None:
-        tm.update_node_table()
+    async def run(self, tm: 'TrustTableManager') -> None:
+        await tm.update_node_table()
 
 
 """
@@ -93,21 +94,20 @@ class TrustTableManager:
         self._nodes = self._parse_initial_node_table(initial_node_table)
         self._task_queue = Queue()
         self._bfc = bfc
-        self._thread = Thread(target=self._loop)
 
         self._last_update_timestamp = 0
         #: the set of nodes (listed by Rsa key) that we are waiting for update from
         self._wait_update_nodes: Set[bytes] = set()
 
-    def update_node_table(self):
+    async def update_node_table(self):
         self._last_update_timestamp = time()
         # TODO config this
         for i in range(10):
             node = self.get_random_node()
-            self._bfc.traffic_manager.send(bfcp_pb2.DiscoveryRequest(), get_node_pub_key(node))
+            await self._bfc.traffic_manager.send(bfcp_pb2.DiscoveryRequest(), get_node_pub_key(node))
             self._wait_update_nodes.add(pubkey_to_deterministic_string(get_node_pub_key(node)))
 
-    def send_node_table(self, recipient: RsaKey):
+    async def send_node_table(self, recipient: RsaKey):
         # TODO lock and dirty state
         node_table_msg = bfcp_pb2.NodeTable()
         for key, node in self._nodes.items():
@@ -152,24 +152,8 @@ class TrustTableManager:
             raise ValueError("No node in the trust table.")
         return self._nodes.random_value()
 
-    def add_task(self, task: TrustTableManagerTask):
-        self._task_queue.put(task)
-
-    def run(self) -> None:
-        """
-        Spin up a new thread for this manager.
-        """
-        self._thread.start()
-
-    def _loop(self):
-        while True:  # TODO maybe have an exit signal for faster ctrl-c
-            try:
-                task: TrustTableManagerTask = self._task_queue.get(True, 10)  # TODO config timeout
-                task.run(self)
-            except Empty:
-                pass
-            if time() - self._last_update_timestamp >= 10:  # TODO config
-                self.add_task(UpdateNodeTableTask())
+    async def run_task(self, task: TrustTableManagerTask):
+        await task.run(self)
 
     @staticmethod
     def _parse_initial_node_table(initial_node_table: bfcp_pb2.NodeTable)\

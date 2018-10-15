@@ -521,3 +521,6 @@ class SocketConnection:
         with self._lock:
             self._buffer.write(data)
             self._condition.notify_all()
+
+    def close(self):
+        self._connection.close()

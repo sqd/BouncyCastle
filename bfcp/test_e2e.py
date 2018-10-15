@@ -123,6 +123,7 @@ class EndToEndTests(unittest.TestCase):
             sock.sendall(b'56789')
             self.assertEqual(sock.recv_all(4), b'7890')
             self.assertEqual(sock.recv_all(9), b'123456789')
+            sock.close()
 
             node1._async_loop.stop()
 

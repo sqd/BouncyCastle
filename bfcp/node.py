@@ -22,7 +22,6 @@ class BFCNode:
 
         self.traffic_manager = TrafficManager(self, rsa_key, self._async_loop, host)
         self.trust_table_manager = TrustTableManager(self, node_table)
-        self.trust_table_manager.run()
         self.connection_manager = ConnectionManager(self)
 
         self.host = host
@@ -49,9 +48,9 @@ class BFCNode:
         elif isinstance(msg, (bfcp_pb2.ToTargetServer, bfcp_pb2.ToOriginalSender)):
             await self.connection_manager.on_payload_received(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.DiscoveryRequest):
-            self.trust_table_manager.add_task(SendNodeTableTask(sender_key))
+            await self.trust_table_manager.run_task(SendNodeTableTask(sender_key))
         elif isinstance(msg, bfcp_pb2.NodeTable):
-            self.trust_table_manager.add_task(MergeNodeTableTask(sender_key, msg))
+            await self.trust_table_manager.run_task(MergeNodeTableTask(sender_key, msg))
 
     async def main_loop(self):
         while True:
