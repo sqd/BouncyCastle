@@ -24,22 +24,26 @@ class ProtoIO:
     """
     Helper class that reads/writes proto object into file
     """
-
-    def read_from_file(self, file_path: str, proto_type: BouncyMessage) -> BouncyMessage:
+    @staticmethod
+    def read_from_file(file_path: str, proto_type_instance: BouncyMessage) -> BouncyMessage:
         """
-        :param file_dir: directory of file to be read
+        :param file_path: directory of file to be read
+        :param proto_type_instance: NOTE: must be instance like NodeTable(), NOT NodeTable
         :return: NodeTable from reading a file
-        usage: <protoio>.read_from_file(<file-path>, NodeTable())
+        usage: ProtoIO.read_from_file(<file-path>, NodeTable())
         """
-        text_proto = open(file_path, 'r')
-        proto_object = text_format.Parse(text_proto, proto_type)
+        text_proto_file = open(file_path, 'r')
+        text_proto = text_proto_file.read()
+        text_proto_file.close()
+        proto_object = text_format.Parse(text_proto, proto_type_instance)
         return proto_object
 
-    def write_to_file(self, file_path: str, proto_object: BouncyMessage) -> None:
+    @staticmethod
+    def write_to_file(file_path: str, proto_object: BouncyMessage) -> None:
         """
         Writes NodeTable object into file
-        :param file_dir: directory of file to be written
-        usage: <protoio>.write_to_file(<file-path>, NodeTable())
+        :param file_path: directory of file to be written
+        usage: ProtoIO.write_to_file(<file-path>, NodeTable())
         """
         text_proto = text_format.MessageToString(proto_object)
         file = open(file_path, 'w')
