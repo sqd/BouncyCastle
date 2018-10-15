@@ -118,3 +118,15 @@ def test_chunked_body_partial_input(s):
 
     rst = parser.feed(s)
     assert rst == HTTPParseStatus.PARTIAL
+
+
+def test_reconstruct_header():
+    s = b"GET http://example.com/path?key=value HTTP/1.0\r\n2Header: header-val1\r\n1Header: header-val1\r\n\r\n"
+    assert HTTPHeaderParser().feed(Ref(s)).reconstruct() == s
+
+
+def test_unproxyfy():
+    rst = HTTPHeaderParser().feed(Ref(HTTP_10_GET()))
+    rst.unproxify()
+    assert rst.headers[b'Host'][1] == b'example.com'
+    assert rst.uri == b'/path?key=value'

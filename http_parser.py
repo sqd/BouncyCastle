@@ -43,7 +43,6 @@ class HTTPRequestHeader:
         order_host = self.headers[b"Host"][0] if b"Host" in self.headers else len(self.headers)
         self.headers[b"Host"] = (order_host, self.location.netloc.encode("ascii"))
         self.uri = urlparse.urlunsplit(["", "", self.location.path, self.location.query, self.location.fragment]).encode("ascii")
-        # TODO: maybe handle Connection
 
     def reconstruct(self)->bytes:
         """
@@ -159,7 +158,6 @@ class HTTPBodyParser:
             return HTTPParseStatus.PARTIAL
 
 
-
 class HTTPParseFailedError(Exception):
     """Thrown when trying to feed more value into a HTTP parser when it has failed."""
     pass
@@ -235,13 +233,13 @@ class HTTPHeaderParser:
         else:
             return HTTPParseStatus.ERROR
 
-    def _prefix_r(self, c:bytes):
+    def _prefix_r(self, c: bytes):
         if c == b'\n':
             self._parse_func = self._start
         else:
             return HTTPParseStatus.ERROR
 
-    def _method(self, c:bytes):
+    def _method(self, c: bytes):
         if c in _token_charset:
             self._parse_result.method += c
         elif c == b' ':
@@ -249,14 +247,14 @@ class HTTPHeaderParser:
         else:
             return HTTPParseStatus.ERROR
 
-    def _method_(self, c:bytes):
+    def _method_(self, c: bytes):
         if c in _uri_charset:
             self._parse_result.uri += c
             self._parse_func = self._m_uri_charset
         else:
             return HTTPParseStatus.ERROR
 
-    def _m_uri_charset(self, c:bytes):
+    def _m_uri_charset(self, c: bytes):
         if c in _uri_charset:
             self._parse_result.uri += c
         elif c == b' ':
@@ -264,21 +262,21 @@ class HTTPHeaderParser:
         else:
             return HTTPParseStatus.ERROR
 
-    def _m_uri_charset_(self, c:bytes):
+    def _m_uri_charset_(self, c: bytes):
         if c == b'H':
             self._parse_result.version = c
             self._parse_func = self._m_url_h
         else:
             return HTTPParseStatus.ERROR
 
-    def _m_url_h(self, c:bytes):
+    def _m_url_h(self, c: bytes):
         if c == b'T':
             self._parse_result.version += c
             self._parse_func = self._m_url_ht
         else:
             return HTTPParseStatus.ERROR
 
-    def _m_url_ht(self, c:bytes):
+    def _m_url_ht(self, c: bytes):
         if c == b'T':
             self._parse_result.version += c
             self._parse_func = self._m_url_htt
@@ -300,7 +298,7 @@ class HTTPHeaderParser:
             return HTTPParseStatus.ERROR
 
     # s = slash
-    def _m_url_https(self, c:bytes):
+    def _m_url_https(self, c: bytes):
         if c.isdigit():
             self._parse_result.version += c
             self._parse_func = self._m_url_httpsd
@@ -308,7 +306,7 @@ class HTTPHeaderParser:
             return HTTPParseStatus.ERROR
 
     # d1 = digit
-    def _m_url_httpsd(self, c:bytes):
+    def _m_url_httpsd(self, c: bytes):
         if c == b'.':
             self._parse_result.version += c
             self._parse_func = self._m_url_httpsdd
@@ -324,20 +322,20 @@ class HTTPHeaderParser:
             return HTTPParseStatus.ERROR
 
     # d1 = digit, d2 = dot, d3 = digit
-    def _m_url_httpsddd(self, c:bytes):
+    def _m_url_httpsddd(self, c: bytes):
         if c == b'\r':
             self._parse_func = self._line_r
         else:
             return HTTPParseStatus.ERROR
 
     # Got an non-ending \r
-    def _line_r(self, c:bytes):
+    def _line_r(self, c: bytes):
         if c == b'\n':
             self._parse_func = self._line_rn
         else:
             return HTTPParseStatus.ERROR
 
-    def _line_rn(self, c:bytes):
+    def _line_rn(self, c: bytes):
         if c in _token_charset:
             self._parse_func = self._header_key
             self._parse_result.headers.append([c, b""])
@@ -346,7 +344,7 @@ class HTTPHeaderParser:
         else:
             return HTTPParseStatus.ERROR
 
-    def _header_key(self, c:bytes):
+    def _header_key(self, c: bytes):
         if c == b':':
             self._parse_func = self._header_key_c
         elif c in _token_charset:
@@ -355,7 +353,7 @@ class HTTPHeaderParser:
             return HTTPParseStatus.ERROR
 
     # c = colon
-    def _header_key_c(self, c:bytes):
+    def _header_key_c(self, c: bytes):
         if c == b' ':
             pass
         elif c in b"\r\n":
@@ -365,19 +363,19 @@ class HTTPHeaderParser:
             self._parse_result.headers[-1][1] += c
             self._parse_func = self._header_key_c_val
 
-    def _header_key_c_val(self, c:bytes):
+    def _header_key_c_val(self, c: bytes):
         if c == b'\r':
             self._parse_func = self._line_r
         else:
             self._parse_result.headers[-1][1] += c
 
     # Got an ending \r
-    def _end_r(self, c:bytes):
+    def _end_r(self, c: bytes):
         if c == b'\n':
             self._parse_func = self._end_rn
             return HTTPParseStatus.SUCCEED
         else:
             return HTTPParseStatus.ERROR
 
-    def _end_rn(self, c:bytes):
+    def _end_rn(self, c: bytes):
         return HTTPParseStatus.ERROR
