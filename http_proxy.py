@@ -107,7 +107,7 @@ class _Worker(EventConsumer):
             port = header.location.port if header.location.port else 80
             self._state = _WorkerState.RELAYING
             self._http_body_parser = HTTPBodyParser(header)
-            self._cur_session = _WorkerSession((header.location.domain, port), self, self._bfc)
+            self._cur_session = _WorkerSession((header.location.netloc, port), self, self._bfc)
             self._cur_session.start()
             self._handle_relaying(ev)
 

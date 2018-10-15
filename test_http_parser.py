@@ -125,7 +125,7 @@ def test_reconstruct_header():
     assert HTTPHeaderParser().feed(Ref(s)).reconstruct() == s
 
 
-def test_unproxyfy():
+def test_unproxyify():
     rst = HTTPHeaderParser().feed(Ref(HTTP_10_GET()))
     rst.unproxify()
     assert rst.headers[b'Host'][1] == b'example.com'

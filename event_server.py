@@ -4,6 +4,10 @@ from typing import Iterable, Tuple, Dict
 import select
 
 
+import logger
+_log = logger.getLogger(__name__)
+
+
 class EventConsumer:
     def handle_event(self, fileno: int, ev: int):
         """
@@ -35,13 +39,15 @@ class EventServer:
         self._event_consumers: Dict[int, EventConsumer] = {}
         """Consumers that subscribe for epoll events. Indexed by their file descriptors."""
         self._epoll = select.epoll()
+        self._running = True
 
     def start(self):
         """
         Start the server.
         """
-        while True:
-            events = self._epoll.poll()
+        self._running = True
+        while self._running:
+            events = self._epoll.poll(1)
             for fileno, event in events:
                 try:
                     self._event_consumers[fileno].handle_event(fileno, event)
@@ -49,6 +55,10 @@ class EventServer:
                     if __debug__:
                         raise e
                     pass  # TODO: logging
+
+    def stop(self):
+        self._running = False
+        self._epoll.close()
 
     def register(self, event_consumer: EventConsumer):
         for fileno, events in event_consumer.events():
