@@ -15,17 +15,17 @@ class TestMessages(unittest.TestCase):
         trust_table_manager = Mock().return_value
 
         # Set up the nodes in the network
-        node1_port = 53251
+        node1_port = 60000
         node1_rsa_key = RSA.generate(2048)
         node1_manager = TrafficManager(Mock(trust_table_manager=trust_table_manager), node1_rsa_key, loop,
                                        ('127.0.0.1', node1_port))
 
-        node2_port = 53252
+        node2_port = 60001
         node2_rsa_key = RSA.generate(2048)
         node2_manager = TrafficManager(Mock(trust_table_manager=trust_table_manager), node2_rsa_key, loop,
                                        ('127.0.0.1', node2_port))
 
-        node3_port = 53253
+        node3_port = 60002
         node3_rsa_key = RSA.generate(2048)
         node3_manager = TrafficManager(Mock(trust_table_manager=trust_table_manager), node3_rsa_key, loop,
                                        ('127.0.0.1', node3_port))
@@ -127,6 +127,10 @@ class TestMessages(unittest.TestCase):
             nonlocal node1_messages
             nonlocal node2_messages
             nonlocal node3_messages
+
+            await node1_manager.start()
+            await node2_manager.start()
+            await node3_manager.start()
 
             await node1_manager.send(msg1, node2_rsa_key.publickey())
 
