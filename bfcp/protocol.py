@@ -182,6 +182,7 @@ class PeerHandshake:
         await send_proto_msg(self._writer, self._make_hello())
 
         peer_hello = PeerHello()
+        print('Waiting for hello on port ', self._own_serving_port)
         await recv_proto_msg(self._reader, peer_hello)
         self.peer_pub_key = proto_to_pubkey(peer_hello.pub_key)
         self.peer_serving_port = \

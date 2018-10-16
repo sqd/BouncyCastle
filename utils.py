@@ -103,7 +103,6 @@ def aes_encrypt(message: bytes, key: bytes) -> bytes:
     for i in range(empty_bytes):
         message += b'\0'
 
-    traceback.print_stack()
     key = key[0:32]  # 256-bit key
     cbc_iv = Random.new().read(AES.block_size)
 

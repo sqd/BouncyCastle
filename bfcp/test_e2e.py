@@ -127,7 +127,7 @@ class EndToEndTests(unittest.TestCase):
 
         print('Main thread id', threading.get_ident())
         asyncio.get_event_loop().set_debug(True)
-        asyncio.get_event_loop().run_forever()
+        asyncio.get_event_loop().run_until_complete(start_scenario())
 
 
 if __name__ == '__main__':

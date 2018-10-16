@@ -5,12 +5,15 @@ BouncyMessages instead of raw TCP traffic.
 import asyncio
 import threading
 from asyncio import StreamReader, StreamWriter
+from random import randint
 from typing import Optional, Dict, Tuple, List
 
 from Crypto.PublicKey.RSA import RsaKey
 
-from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string, pubkey_to_proto
+from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string, pubkey_to_proto, \
+    get_node_pub_key
 from bfcp.trust import TrustTableManager
+from protos import bfcp_pb2
 from protos.bfcp_pb2 import BouncyMessage
 
 from logger import getLogger
@@ -95,6 +98,7 @@ class TrafficManager:
         self._open_server_sockets: Dict[bytes, BfcpSocketHandler] = {}
 
         if self._serving_host is not None:
+            print('Serving', serving_host)
             self._server = self._async_loop.run_until_complete(
                 asyncio.start_server(
                     lambda reader, writer: self._on_new_server_socket(reader, writer),
@@ -106,8 +110,10 @@ class TrafficManager:
         Sends the provided BouncyMessage to the node in the network identified by the given public
         key. It's also possible to send a message to the node itself.
         """
+        msg = self._wrap_into_bouncy_message(msg)
+
         if pub_key is None:
-            pub_key = self._bfc.traffic_manager.get_random_node()
+            pub_key = get_node_pub_key(self._bfc.trust_table_manager.get_random_node())
 
         _log.debug('Sending message: %s\nTo: %s\nLogged by: %s\nThread: %d', str(msg),
                    str(pubkey_to_proto(pub_key)),
@@ -128,6 +134,11 @@ class TrafficManager:
 
             reader, writer = await asyncio.open_connection(
                 node.node.last_known_address, node.node.last_port, loop=self._async_loop)
+
+            _log.debug('New client connection on %s. Logged by %s',
+                       writer.get_extra_info('peername'),
+                       str(pubkey_to_proto(self._own_rsa_key)))
+
             handler = await self._open_new_socket_handler(reader, writer)
             self._register_client_socket_handler(handler)
             self._open_client_sockets[pub_key_index] = handler
@@ -148,12 +159,14 @@ class TrafficManager:
         )
 
     async def new_messages(self) -> List[Tuple[RsaKey, BouncyMessage]]:
+        print('Im here')
         if not self._next_message_futures:
             await self._new_socket_available
 
         # We will also wait on self._new_socket_available. If we get a new socket, we will keep
         # blocking on the call below even when the new socket has messages. This is because the
         # initial call was made without that socket in mind.
+        print('Waiting for messages', str(pubkey_to_proto(self._own_rsa_key)))
         self._new_socket_available = self._async_loop.create_future()
         done, _ = await asyncio.wait(self._next_message_futures | {self._new_socket_available},
                                      loop=self._async_loop, return_when=asyncio.FIRST_COMPLETED)
@@ -200,7 +213,10 @@ class TrafficManager:
 
         return socket_handler
 
-    async def _on_new_server_socket(self, reader, writer):
+    async def _on_new_server_socket(self, reader: StreamReader, writer: StreamWriter):
+        print('Oh ma man')
+        _log.debug('New server connection on %s. Logged by %s', writer.get_extra_info('peername'),
+                   str(pubkey_to_proto(self._own_rsa_key)))
         handler = await self._open_new_socket_handler(reader, writer)
         self._register_server_socket_handler(handler)
 
@@ -209,3 +225,28 @@ class TrafficManager:
 
     def get_loop(self) -> asyncio.AbstractEventLoop:
         return self._async_loop
+
+    def _wrap_into_bouncy_message(self, msg):
+        if isinstance(msg, BouncyMessage):
+            return msg
+
+        wrapped = BouncyMessage()
+        if isinstance(msg, bfcp_pb2.DiscoveryRequest):
+            wrapped.discovery_request.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.NodeTable):
+            wrapped.node_table.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.ConnectionRequest):
+            wrapped.connection_request.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.ConnectionResponse):
+            wrapped.connection_response.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.ChannelRequest):
+            wrapped.channel_request.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.ChannelResponse):
+            wrapped.channel_response.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.ToOriginalSender):
+            wrapped.to_original_sender.CopyFrom(msg)
+        elif isinstance(msg, bfcp_pb2.ToTargetServer):
+            wrapped.to_target_server.CopyFrom(msg)
+
+        wrapped.ballast = b'\0' * randint(0, GLOBAL_VARS['MAX_BALLAST_BYTES'])
+        return wrapped

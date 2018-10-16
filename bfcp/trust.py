@@ -132,7 +132,7 @@ class TrustTableManager:
         """
         Returns a NodeTableEntry with the pub key, else return None
         """
-        return self._nodes.get(pub_key, None)
+        return self._nodes.get(pubkey_to_deterministic_string(pub_key), None)
 
     def get_node_with_requirement(self, en_requirement: bfcp_pb2.EndNodeRequirement) -> Optional[bfcp_pb2.NodeTableEntry]:
         """Returns a node public key, given EndNodeRequirement like location must be in China"""
@@ -157,7 +157,7 @@ class TrustTableManager:
 
     @staticmethod
     def _parse_initial_node_table(initial_node_table: bfcp_pb2.NodeTable)\
-            -> Dict[RsaKey, bfcp_pb2.NodeTableEntry]:
+            -> Dict[bytes, bfcp_pb2.NodeTableEntry]:
         result = RandomDict()
         for entry in initial_node_table.entries:
             pub_key = proto_to_pubkey(entry.node.public_key)
