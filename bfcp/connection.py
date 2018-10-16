@@ -65,10 +65,10 @@ class ConnectionManager:
         else:
             return ConnectionType.neither
 
-    async def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'OriginalSenderConnection':
+    async def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int], on_established, on_new_data) -> 'OriginalSenderConnection':
         conn = OriginalSenderConnection(self, self._traffic_manager)
         print('ConnManager.new_connection')
-        await conn.initiate_connection(en_requirement, addr)
+        await conn.initiate_connection(en_requirement, addr, on_established, on_new_data)
         self._os_conn[conn.uuid] = conn
         return conn
 
@@ -87,7 +87,7 @@ class ConnectionManager:
                 self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(next_node))
             await self._traffic_manager.send(msg, get_node_pub_key(next_node))
 
-        if remaining_hops > 0:
+        if remaining_hops > 0 or msg.connection_params.uuid in self._os_conn:
             await send_randomly()
         else:
             if self._bfc_node.meets_requirements(msg.end_node_requirement):
@@ -108,12 +108,16 @@ class ConnectionManager:
                     await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
-        print("connManager.on_conn_res")
+        print("connManager.on_conn_resp")
         receiver_type = self._check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
+            print("on conn_response origin")
             await self._os_conn[msg.uuid].on_end_node_found(msg)
         elif receiver_type == ConnectionType.relay:
+            print("on conn_response relay")
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
+        else:
+            print("PANIC on conn_response neither")
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
         print("connManager.on_channe_req")
@@ -131,25 +135,35 @@ class ConnectionManager:
             msg.connection_params.remaining_hops -= 1
             next_node = self._trust_table.get_random_node().node \
                 if msg.connection_params.remaining_hops > 0 else msg.end_node
-            self._relay_channels[msg.channel_uuid] = (sender_key, proto_to_pubkey(next_node.public_key))
+
+            prev = sender_key
+            if msg.channel_uuid in self._relay_channels:
+                prev = self._relay_channels[msg.channel_uuid][0]
+            self._relay_channels[msg.channel_uuid] = (prev, proto_to_pubkey(next_node.public_key))
 
             print('before on_chann_request await')
             await self._traffic_manager.send(msg, proto_to_pubkey(next_node.public_key))
             print('after on_chann_request await')
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
-        print("connManager.on_channel_res")
+        print("connManager.on_channel_response")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
+            print("connManager.on_channel_response::origin")
+            await self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_id.channel_uuid, sender_key)
+            print("connManager.on_channel_response::origin end")
         elif receiver_type == ConnectionType.relay:
-            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_uuid][0])
+            print("connManager.on_channel_response::relay")
+            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id.channel_uuid][0])
+            print("connManager.on_channel_response::relay end")
+        else:
+            print("PANIC on chann response: else")
 
     async def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
         print("connManager.on_payload")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
-            self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
+            await self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][dir_idx])
@@ -188,7 +202,7 @@ class ConnectionManager:
                                     prev_hops)
         self._en_conn[conn_request.connection_params.uuid] = (en_conn, prev_hops)
 
-        gather(
+        await gather(
             en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port)),
             self._traffic_manager.send(conn_resp)
         )
@@ -268,12 +282,16 @@ class OriginalSenderConnection:
         self._challenge_bytes: bytes = get_random_bytes(GLOBAL_VARS['SIGNATURE_CHALLENGE_BYTES'])
         self._session_key: Optional[bytes] = None
 
-    async def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
+    async def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int], on_established, on_new_data):
         """
         This function can only be called once.
         @param en_requirement: EndNodeRequirement from client configurations.
         @param ts_address: the address clients want to connect to.
         """
+
+        self._on_established = on_established
+        self._on_new_data = on_new_data
+
         conn_request = bfcp_pb2.ConnectionRequest()
 
         conn_request.connection_params.uuid = self.uuid
@@ -309,11 +327,13 @@ class OriginalSenderConnection:
             channel_request.end_node.CopyFrom(conn_resp.selected_end_node)
             channel_request.channel_uuid = channel_uuid
             channel_request.connection_params.uuid = self.uuid
-            channel_request.connection_params.remaining_hops = self._make_channel_length()
+            channel_request.connection_params.remaining_hops = 2
+            # channel_request.connection_params.remaining_hops = self._make_channel_length()
 
             await self._traffic_manager.send(channel_request)
 
-    def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
+    async def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
+        print('on chann established ev')
         if self._is_closed:
             return
 
@@ -321,12 +341,11 @@ class OriginalSenderConnection:
         if (not self._establish_event_fired) and \
                 len(self._channels) >= GLOBAL_VARS['MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT']:
             self._establish_event_fired = True
-            for callback in self._on_established:
-                # TODO how do we know what exceptions are raised when there's a failure?
-                callback(None)
+            await asyncio.gather(*[cb(self, None) for cb in self._on_established])
             self._established_future.set_result(True)
+        print('end chann established ev')
 
-    def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
+    async def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
         if self._is_closed:
             return
 
@@ -347,7 +366,7 @@ class OriginalSenderConnection:
                 self._future_packets[msg.index] = msg
 
             while self._next_recv_index in self._future_packets:
-                asyncio.gather(*[cb(msg.payload) for cb in self._on_new_data])
+                await asyncio.gather(*[cb(self, msg.payload) for cb in self._on_new_data])
                 del(self._future_packets[self._next_recv_index])
                 self._next_recv_index += 1
 
@@ -378,37 +397,9 @@ class OriginalSenderConnection:
         """
         Closes the connection with the target server.
         """
-        utils.run_coroutine_threadsafe_and_print(self._send_internal(b''),
-                                                 self._traffic_manager.get_loop())
+        utils.run_coroutine_threadsafe_and_print(self._send_internal(b''), self._traffic_manager.get_loop())
         self._close_internal()
 
-    def register_on_new_data(self, callback) -> None:
-        """
-        Registers a callback for whenever new data is available from the target server. The callback
-        will be called with the bytes retrieved from the connection.
-        """
-        self._on_new_data.append(callback)
-
-    def unregister_on_new_data(self, callback: Callable[[bytes], None]) -> None:
-        """
-        Unregisters the specified callback function. Note, this needs to be the same object as was
-        passed into register_on_new_data().
-        """
-        self._on_new_data.remove(callback)
-
-    def register_on_established(self, callback: Callable[[Exception], None]) -> None:
-        """
-        Registers a callback for whenever the connection is securely established. If the Connection
-        fails to be established, an Exception is passed to the callback. Otherwise, None is passed.
-        """
-        self._on_established.append(callback)
-
-    def unregister_on_established(self, callback: Callable[[Exception], None]) -> None:
-        """
-        Unregisters the specified callback function. Note, this needs to be the same object as was
-        passed into register_on_established().
-        """
-        self._on_established.remove(callback)
 
     def register_on_closed(self, callback: Callable[[Exception], None]) -> None:
         """

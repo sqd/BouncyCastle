@@ -21,7 +21,7 @@ async def _echo_server(reader: StreamReader, writer: StreamWriter):
         data_read += len(data)
     writer.close()
 
-async def just_print(s):
+async def just_print(conn, s):
     print("just print:", s)
 
 async def test_something():
@@ -118,13 +118,16 @@ async def test_something():
 
     reqs = EndNodeRequirement()
     # reqs.country = 840
-    conn = await node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port))
-    conn.register_on_new_data(just_print)
-    while True:
+
+    async def send_data(conn, ex):
+        print('start sending data')
         await conn.send(b'01234')
         await conn.send(b'56789')
         await conn.send(b'01234')
         await conn.send(b'56789')
 
+    await node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port), [send_data], [just_print])
+
 if __name__ == '__main__':
     asyncio.get_event_loop().run_until_complete(test_something())
+    asyncio.get_event_loop().run_forever()
