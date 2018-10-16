@@ -92,33 +92,23 @@ def generate_aes_key(bits: int) -> bytes:
 
 
 def aes_encrypt(message: bytes, key: bytes) -> bytes:
-    print('fucking unicorns 5.1', threading.get_ident())
     checksum = hashlib.md5(message).digest()
-    print('fucking unicorns 5.2', threading.get_ident())
     original_message = message
-    print('fucking unicorns 5.3', threading.get_ident())
     message = checksum + struct.pack('>I', len(original_message)) + original_message
-    print('fucking unicorns 5.4', threading.get_ident())
 
     # add empty spaces to round up to AES.block_size
     empty_bytes = AES.block_size - (len(message) % AES.block_size)
-    print('fucking unicorns 5.5', threading.get_ident())
     if empty_bytes == AES.block_size:
         empty_bytes = 0
     for i in range(empty_bytes):
         message += b'\0'
 
-    print('fucking unicorns 5.6', threading.get_ident())
-    print('fucking unicorns 5.6.0', threading.get_ident(), key)
     traceback.print_stack()
     key = key[0:32]  # 256-bit key
-    print('fucking unicorns 5.6.1', threading.get_ident())
     cbc_iv = Random.new().read(AES.block_size)
-    print('fucking unicorns 5.7', threading.get_ident())
 
     encryptor = AES.new(key, AES.MODE_CBC, cbc_iv)
     cyphertext = encryptor.encrypt(message)
-    print('fucking unicorns 5.8', threading.get_ident())
 
     output = cbc_iv + cyphertext
     return output
