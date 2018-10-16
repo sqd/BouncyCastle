@@ -44,3 +44,22 @@ class TestConfig(unittest.TestCase):
         ProtoIO.create_write_nodetable(node_entries, '../node_table.txt')
         node_table = ProtoIO.read_from_file('../node_table.txt', NodeTable())
         self.assertEqual(len(node_table.entries), n)
+
+    def test_create_nodetable_aws(self):
+        addresses = ['34.219.62.232', '34.217.12.64', '18.237.76.130']
+        node_entries = []
+        for address in addresses:
+            node = Node()
+            key = RSA.generate(1024).publickey()
+            node.public_key.CopyFrom(pubkey_to_proto(key))
+            node.country_code = 840
+            node.last_known_address = address
+            node.last_port = 8080
+            entry = NodeTableEntry()
+            entry.node.CopyFrom(node)
+            entry.trust_score = 1.0
+            entry.avg_n = 1.0
+            entry.avg_sum = 0.0
+            node_entries.append(entry)
+        ProtoIO.create_write_nodetable(node_entries, '../node_table.txt')
+        self.assertEqual(1, 1)
