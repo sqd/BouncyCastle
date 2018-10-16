@@ -67,13 +67,13 @@ class ConnectionManager:
 
     async def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int], on_established, on_new_data) -> 'OriginalSenderConnection':
         conn = OriginalSenderConnection(self, self._traffic_manager)
-        print('ConnManager.new_connection')
+        # print('ConnManager.new_connection')
         await conn.initiate_connection(en_requirement, addr, on_established, on_new_data)
         self._os_conn[conn.uuid] = conn
         return conn
 
     async def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: RsaKey) -> None:
-        print("connManager.on_conn_request")
+        # print("connManager.on_conn_request")
         msg.connection_params.remaining_hops -= 1
         conn_uuid = msg.connection_params.uuid
         remaining_hops = msg.connection_params.remaining_hops
@@ -108,22 +108,22 @@ class ConnectionManager:
                     await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
-        print("connManager.on_conn_resp")
+        # print("connManager.on_conn_resp")
         receiver_type = self._check_conn_type(msg.uuid)
         if msg.uuid in self._os_conn:
-            print("on conn_response origin")
+            # print("on conn_response origin")
             await self._os_conn[msg.uuid].on_end_node_found(msg)
         elif msg.uuid in self._relay_conn_requests:
-            print("on conn_response relay")
+            # print("on conn_response relay")
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
         else:
             print("PANIC on conn_response neither")
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
-        print("connManager.on_channe_req")
+        # print("connManager.on_channe_req")
         if msg.connection_params.uuid in self._en_conn:
             # I am the end node
-            print('on_chann_request: I\'m the end node')
+            # print('on_chann_request: I\'m the end node')
             self._en_conn[msg.connection_params.uuid][1].append((msg.channel_uuid, sender_key))
 
             resp = bfcp_pb2.ChannelResponse()
@@ -131,7 +131,7 @@ class ConnectionManager:
             resp.channel_id.connection_uuid = msg.connection_params.uuid
             await self._traffic_manager.send(resp, sender_key)
         else:
-            print('on_chann_request: neither')
+            # print('on_chann_request: neither')
             msg.connection_params.remaining_hops -= 1
             next_node = self._trust_table.get_random_node().node \
                 if msg.connection_params.remaining_hops > 0 else msg.end_node
@@ -141,34 +141,39 @@ class ConnectionManager:
                 prev = self._relay_channels[msg.channel_uuid][0]
             self._relay_channels[msg.channel_uuid] = (prev, proto_to_pubkey(next_node.public_key))
 
-            print('before on_chann_request await')
+            # print('before on_chann_request await')
             await self._traffic_manager.send(msg, proto_to_pubkey(next_node.public_key))
-            print('after on_chann_request await')
+            # print('after on_chann_request await')
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
-        print("connManager.on_channel_response")
+        # print("connManager.on_channel_response")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if msg.channel_id.connection_uuid in self._os_conn:
-            print("connManager.on_channel_response::origin")
+            # print("connManager.on_channel_response::origin")
             await self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_id.channel_uuid, sender_key)
-            print("connManager.on_channel_response::origin end")
+            # print("connManager.on_channel_response::origin end")
         elif msg.channel_id.channel_uuid in self._relay_channels:
-            print("connManager.on_channel_response::relay")
+            # print("connManager.on_channel_response::relay")
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id.channel_uuid][0])
-            print("connManager.on_channel_response::relay end")
+            # print("connManager.on_channel_response::relay end")
         else:
             print("PANIC on chann response: else")
 
     async def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
         print("connManager.on_payload")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
-        if receiver_type == ConnectionType.origin:
+        if msg.channel_id.connection_uuid in self._os_conn:
+            print('get origin payload ', msg.payload)
             await self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
-        elif receiver_type == ConnectionType.relay:
+        elif msg.channel_id.channel_uuid in self._relay_channels:
+            print('get relayer payload ', msg.payload)
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id.channel_uuid][dir_idx])
-        elif receiver_type == ConnectionType.end:
+        elif msg.channel_id.connection_uuid in self._en_conn:
+            print('get end payload ', msg.payload)
             await self._en_conn[msg.channel_id.connection_uuid][0].send(msg.payload)
+        else:
+            print('PANIC get payload neither')
 
     async def _become_end_node(self, conn_request: bfcp_pb2.ConnectionRequest, sender_key: RsaKey):
         """
@@ -306,7 +311,7 @@ class OriginalSenderConnection:
             pubkey_to_proto(self._sender_connection_key.publickey()))
         conn_request.signature_challenge = self._challenge_bytes
 
-        print('sending conn request')
+        # print('sending conn request')
         await self._traffic_manager.send(conn_request)
 
     async def on_end_node_found(self, conn_resp: bfcp_pb2.ConnectionResponse):
@@ -334,7 +339,7 @@ class OriginalSenderConnection:
             await self._traffic_manager.send(channel_request)
 
     async def on_channel_established(self, channel_uuid: str, next_hop_pub_key: RsaKey):
-        print('on chann established ev')
+        # print('on chann established ev')
         if self._is_closed:
             return
 
@@ -342,11 +347,11 @@ class OriginalSenderConnection:
         print('channel num: ', len(self._channels))
         if (not self._establish_event_fired) and \
                 len(self._channels) >= 1:
-            print('firing chann ev')
+            # print('firing chann ev')
             self._establish_event_fired = True
             self._established_future.set_result(True)
             await asyncio.gather(*[asyncio.ensure_future(cb(self, None)) for cb in self._on_established])
-        print('end chann established ev')
+        # print('end chann established ev')
 
     async def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
         if self._is_closed:
@@ -369,6 +374,7 @@ class OriginalSenderConnection:
                 self._future_packets[msg.index] = msg
 
             while self._next_recv_index in self._future_packets:
+                print('decrypt: ', msg.payload)
                 await asyncio.gather(*[cb(self, msg.payload) for cb in self._on_new_data])
                 del(self._future_packets[self._next_recv_index])
                 self._next_recv_index += 1
@@ -378,9 +384,9 @@ class OriginalSenderConnection:
             self._close_internal()
 
     async def send(self, data: bytes):
-        print('waiting for establisehd future')
+        # print('waiting for establisehd future')
         await self._established_future
-        print('sending')
+        # print('sending')
         bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()
         bouncy_tcp_msg.payload = data
         bouncy_tcp_msg.index = self._next_send_index
