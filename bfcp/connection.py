@@ -341,8 +341,8 @@ class OriginalSenderConnection:
             # Connection is ready to be closed
             self._close_internal()
 
-<<<<<<< HEAD
     async def send(self, data: bytes):
+        await self._established_future
         print('sending')
         bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()
         bouncy_tcp_msg.payload = data

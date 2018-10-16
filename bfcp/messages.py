@@ -110,11 +110,12 @@ class TrafficManager:
 
         print('TM.send')
         if pub_key is None:
-            pub_key = get_node_pub_key(self._bfc.trust_table_manager.get_random_node())
+            node = self._bfc.trust_table_manager.get_random_node()
+            pub_key = get_node_pub_key(node)
 
-        _log.debug('Sending message: %s\nTo: %s\nLogged by: %s\nThread: %d', str(msg),
-                   str(pubkey_to_proto(pub_key)),
-                   str(pubkey_to_proto(self._own_rsa_key.publickey())),
+        _log.debug('Sending message: %s\nTo: %s\nLogged by: %s\nThread: %d', msg.WhichOneof('message'),
+                   self._bfc.trust_table_manager.get_node_by_pubkey(pub_key).node.last_port,
+                   self._bfc.trust_table_manager.get_node_by_pubkey(self._own_rsa_key).node.last_port,
                    threading.get_ident())
 
         pub_key_index = pubkey_to_deterministic_string(pub_key)
@@ -134,7 +135,7 @@ class TrafficManager:
 
             _log.debug('New client connection on %s. Logged by %s',
                        writer.get_extra_info('peername'),
-                       str(pubkey_to_proto(self._own_rsa_key)))
+                       self._bfc.trust_table_manager.get_node_by_pubkey(self._own_rsa_key).node.last_port)
 
             handler = await self._open_new_socket_handler(reader, writer)
             self._register_client_socket_handler(handler)
@@ -156,14 +157,13 @@ class TrafficManager:
         )
 
     async def new_messages(self) -> List[Tuple[RsaKey, BouncyMessage]]:
-        print('Im here')
         if not self._next_message_futures:
             await self._new_socket_available
 
         # We will also wait on self._new_socket_available. If we get a new socket, we will keep
         # blocking on the call below even when the new socket has messages. This is because the
         # initial call was made without that socket in mind.
-        print('Waiting for messages', str(pubkey_to_proto(self._own_rsa_key)))
+        print('Waiting for messages', hash(str(pubkey_to_proto(self._own_rsa_key))))
         self._new_socket_available = self._async_loop.create_future()
         done, _ = await asyncio.wait(self._next_message_futures | {self._new_socket_available},
                                      loop=self._async_loop, return_when=asyncio.FIRST_COMPLETED)
@@ -185,9 +185,9 @@ class TrafficManager:
             return await self.new_messages()
         else:
             for pub_key, msg in msgs:
-                _log.debug('Received message: %s\nFrom: %s\nLogged by: %s\nThread: %d', str(msg),
-                           str(pubkey_to_proto(pub_key)),
-                           str(pubkey_to_proto(self._own_rsa_key.publickey())),
+                _log.debug('Received message: %s\nFrom: %s\nLogged by: %s\nThread: %d', type(msg.message),
+                           self._bfc.trust_table_manager.get_node_by_pubkey(pub_key).node.last_port,
+                           self._bfc.trust_table_manager.get_node_by_pubkey(self._own_rsa_key).node.last_port,
                            threading.get_ident())
             return msgs
 
@@ -211,9 +211,9 @@ class TrafficManager:
         return socket_handler
 
     async def _on_new_server_socket(self, reader: StreamReader, writer: StreamWriter):
-        print('Oh ma man')
+        print('=====================================================================================================Oh ma man')
         _log.debug('New server connection on %s. Logged by %s', writer.get_extra_info('peername'),
-                   str(pubkey_to_proto(self._own_rsa_key)))
+                   self._bfc.trust_table_manager.get_node_by_pubkey(self._own_rsa_key).node.last_port)
         handler = await self._open_new_socket_handler(reader, writer)
         self._register_server_socket_handler(handler)
 

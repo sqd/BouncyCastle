@@ -117,7 +117,7 @@ async def test_something():
     print('after starting loops')
 
     reqs = EndNodeRequirement()
-    reqs.country = 840
+    # reqs.country = 840
     conn = await node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port))
     conn.register_on_new_data(just_print)
     while True:

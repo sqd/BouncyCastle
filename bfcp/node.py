@@ -40,6 +40,7 @@ class BFCNode:
         return await self.connection_manager.new_connection(en_requirement, addr)
 
     async def handle_message(self, msg: bfcp_pb2.BouncyMessage, sender_key: RsaKey):
+        print("handle message ", msg.WhichOneof('message'))
         if isinstance(msg, bfcp_pb2.ConnectionRequest):
             await self.connection_manager.on_conn_request(msg, sender_key)
         elif isinstance(msg, bfcp_pb2.ConnectionResponse):

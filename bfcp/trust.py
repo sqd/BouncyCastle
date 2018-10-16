@@ -11,7 +11,7 @@ from randomdict import RandomDict
 
 import protos.bfcp_pb2 as bfcp_pb2
 from bfcp.protocol import proto_to_pubkey, pubkey_to_deterministic_string, get_node_pub_key, \
-    matches_requirements
+    matches_requirements, pubkey_to_proto
 
 from config import *
 
@@ -148,9 +148,13 @@ class TrustTableManager:
         :raises ValueError if there is no node.
         :return: a random node.
         """
-        if len(self._nodes) == 0:
+        if len(self._nodes) <= 1:
             raise ValueError("No node in the trust table.")
-        return self._nodes.random_value()
+        rst = self._nodes.random_value()
+        if pubkey_to_proto(self._bfc.rsa_key.publickey()) == rst.node.public_key:
+            return self.get_random_node()
+        else:
+            return rst
 
     async def run_task(self, task: TrustTableManagerTask):
         await task.run(self)
