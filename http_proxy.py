@@ -12,6 +12,7 @@ from config import HTTPProxyServerConfig
 from http_parser import HTTPHeaderParser, HTTPParseStatus, HTTPBodyParser, HTTPRequestHeader
 from bfcp.node import BFCNode
 from bfcp.connection import OriginalSenderConnection
+from protos.bfcp_pb2 import EndNodeRequirement
 from utils import Ref
 
 from logger import getLogger
@@ -67,7 +68,7 @@ class _Worker(EventConsumer):
         self._client_send_buf += s
         try:
             while self._client_send_buf and self._client_writable:
-                byte_sent = self._client_socket.on_payload(self._client_send_buf)
+                byte_sent = self._client_socket.send(self._client_send_buf)
                 total_byte_sent += byte_sent
                 self._client_send_buf = self._client_send_buf[byte_sent:]
         except socket.error as e:
@@ -217,7 +218,7 @@ class _WorkerSession:
 
     def start(self):
         _log.info("Relaying to %s.", self._location)
-        self._bfc_conn = self._bfc.new_connection(None, self._location)
+        self._bfc_conn = self._bfc.new_connection(EndNodeRequirement(), self._location)
         _log.info("%s: got BFC connection.", self._location)
         self._bfc_conn.register_on_new_data(self.recv_callback)
 

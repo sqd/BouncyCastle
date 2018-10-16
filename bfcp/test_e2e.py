@@ -8,6 +8,9 @@ from Crypto.PublicKey import RSA
 from bfcp.connection import SocketConnection
 from bfcp.node import BFCNode
 from bfcp.protocol import pubkey_to_proto
+from config import HTTPProxyServerConfig
+from event_server import EventServer
+from http_proxy import HTTPProxyServer
 from protos.bfcp_pb2 import NodeTable, Node, EndNodeRequirement
 
 
@@ -107,27 +110,36 @@ class EndToEndTests(unittest.TestCase):
             )
 
         def user_thread():
-            # Sample connection
-            print('User_tread id', threading.get_ident())
-            reqs = EndNodeRequirement()
-            reqs.country = 840
-            conn = node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port))
-            sock = SocketConnection(conn)
-            print('WTF1')
-            sock.sendall(b'01234')
-            print('WTF2')
-            sock.sendall(b'56789')
-            print('WTF3')
-            self.assertEqual(sock.recv_all(7), b'0123456')
-            sock.sendall(b'01234')
-            print('WTF4')
-            sock.sendall(b'56789')
-            print('WTF5')
-            self.assertEqual(sock.recv_all(4), b'7890')
-            self.assertEqual(sock.recv_all(9), b'123456789')
-            sock.close()
-            print('WTF6')
-            node1.traffic_manager.get_loop().stop()
+            http_proxy_default_config = HTTPProxyServerConfig([("127.0.0.1", 8080)])
+            ev_server = EventServer()
+            http_proxy = HTTPProxyServer(http_proxy_default_config, node1, ev_server)
+            print("(Proxy) Epoll event looping...")
+            http_proxy.start()
+            ev_server.start()
+
+        # def user_thread():
+        #     # Sample connection
+        #     asyncio.set_event_loop(asyncio.new_event_loop())
+        #     print('User_tread id', threading.get_ident())
+        #     reqs = EndNodeRequirement()
+        #     reqs.country = 840
+        #     conn = node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port))
+        #     sock = SocketConnection(conn)
+        #     print('WTF1')
+        #     sock.sendall(b'01234')
+        #     print('WTF2')
+        #     sock.sendall(b'56789')
+        #     print('WTF3')
+        #     self.assertEqual(sock.recv_all(7), b'0123456')
+        #     sock.sendall(b'01234')
+        #     print('WTF4')
+        #     sock.sendall(b'56789')
+        #     print('WTF5')
+        #     self.assertEqual(sock.recv_all(4), b'7890')
+        #     self.assertEqual(sock.recv_all(9), b'123456789')
+        #     sock.close()
+        #     print('WTF6')
+        #     node1.traffic_manager.get_loop().stop()
 
         thread = threading.Thread(target=user_thread)
         thread.start()

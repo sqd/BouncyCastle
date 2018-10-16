@@ -206,6 +206,7 @@ class EndNodeConnection:
 
     async def initiate_connection(self, addr: Tuple[str, int]):
         # Initiate the connection with the target server
+        print('END SERVER: Connecting to: ', addr)
         self._reader_writer_future = ensure_future(open_connection(*addr))
         reader, _ = await self._reader_writer_future
         while True:
