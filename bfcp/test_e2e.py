@@ -82,17 +82,11 @@ class EndToEndTests(unittest.TestCase):
         node_table.entries.add().node.CopyFrom(node6_info)
 
         node1 = BFCNode(node1_info, ('127.0.0.1', node1_port), node1_rsa_key, node_table)
-        node1_loop_future = asyncio.ensure_future(node1.main_loop())
         node2 = BFCNode(node2_info, ('127.0.0.1', node2_port), node2_rsa_key, node_table)
-        node2_loop_future = asyncio.ensure_future(node2.main_loop())
         node3 = BFCNode(node3_info, ('127.0.0.1', node3_port), node3_rsa_key, node_table)
-        node3_loop_future = asyncio.ensure_future(node3.main_loop())
         node4 = BFCNode(node4_info, ('127.0.0.1', node4_port), node4_rsa_key, node_table)
-        node4_loop_future = asyncio.ensure_future(node4.main_loop())
         node5 = BFCNode(node5_info, ('127.0.0.1', node5_port), node5_rsa_key, node_table)
-        node5_loop_future = asyncio.ensure_future(node5.main_loop())
         node6 = BFCNode(node6_info, ('127.0.0.1', node6_port), node6_rsa_key, node_table)
-        node6_loop_future = asyncio.ensure_future(node6.main_loop())
 
         target_server_port = 54360
 
@@ -102,16 +96,17 @@ class EndToEndTests(unittest.TestCase):
 
             # Loop forever
             return await asyncio.gather(
-                node1_loop_future,
-                node2_loop_future,
-                node3_loop_future,
-                node4_loop_future,
-                node5_loop_future,
-                node6_loop_future,
+                node1.main_loop(),
+                node2.main_loop(),
+                node3.main_loop(),
+                node4.main_loop(),
+                node5.main_loop(),
+                node6.main_loop(),
             )
 
         def user_thread():
             # Sample connection
+            print('User_tread id', threading.get_ident())
             reqs = EndNodeRequirement()
             reqs.country = 840
             conn = node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port))
@@ -130,6 +125,8 @@ class EndToEndTests(unittest.TestCase):
         thread = threading.Thread(target=user_thread)
         thread.start()
 
+        print('Main thread id', threading.get_ident())
+        asyncio.get_event_loop().set_debug(True)
         asyncio.get_event_loop().run_forever()
 
 
