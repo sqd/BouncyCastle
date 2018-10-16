@@ -121,7 +121,7 @@ class ConnectionManager:
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
         print("connManager.on_channe_req")
-        if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key.publickey():
+        if msg.connection_params.uuid in self._en_conn:
             # I am the end node
             print('on_chann_request: I\'m the end node')
             self._en_conn[msg.connection_params.uuid][1].append((msg.channel_uuid, sender_key))

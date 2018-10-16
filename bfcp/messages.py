@@ -53,7 +53,7 @@ class BfcpSocketHandler:
 
         msg = BouncyMessage()
         await recv_proto_msg(self._reader, msg, GLOBAL_VARS['MAX_MESSAGE_LENGTH'], self._handshake.session_key)
-        print(msg)
+        # print(self._traffic_manager._bfc.host[1], '---NM---', msg)
         return msg
 
     async def send_bouncy_message(self, msg: BouncyMessage):
@@ -119,15 +119,10 @@ class TrafficManager:
 
         pub_key_index = pubkey_to_deterministic_string(pub_key)
         if pub_key_index in self._open_client_sockets:
-            print('send cli sock')
             await self._open_client_sockets[pub_key_index].send_bouncy_message(msg)
-            print('send cli sock sent')
         elif pub_key_index in self._open_server_sockets:
-            print('send srv sock')
             await self._open_server_sockets[pub_key_index].send_bouncy_message(msg)
-            print('send srv sock sent')
         else:
-            print('send new conn')
             # We need to form a new connection
             node = self._bfc.trust_table_manager.get_node_by_pubkey(pub_key)
             if node is None:
@@ -141,7 +136,6 @@ class TrafficManager:
             self._register_client_socket_handler(handler)
             self._open_client_sockets[pub_key_index] = handler
             await handler.send_bouncy_message(msg)
-            print('send new conn sent')
 
     @staticmethod
     async def _wrap_future_with_socket_handler(future, socket_handler):
@@ -158,6 +152,8 @@ class TrafficManager:
         )
 
     async def new_messages(self) -> List[Tuple[RsaKey, BouncyMessage]]:
+        # print(self._bfc.host[1], '---H---', msg)
+        # print(self._bfc.host[1], '--- in new_messages 1')
         if not self._next_message_futures:
             await self._new_socket_available
 
@@ -168,6 +164,7 @@ class TrafficManager:
         done, _ = await asyncio.wait(self._next_message_futures | {self._new_socket_available},
                                      loop=self._async_loop, return_when=asyncio.FIRST_COMPLETED)
 
+        # print(self._bfc.host[1], '--- in new_messages 2')
         msgs = []
         found_new_socket = False
         for f in done:
@@ -179,6 +176,7 @@ class TrafficManager:
 
                 self._next_message_futures.remove(f)
                 self._add_future_for_next_message_from(socket_handler)
+        # print(self._bfc.host[1], '--- in new_messages 3')
 
         if msgs == [] and found_new_socket:
             # retry

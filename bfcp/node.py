@@ -40,11 +40,13 @@ class BFCNode:
         return await self.connection_manager.new_connection(en_requirement, addr)
 
     async def handle_message(self, msg: bfcp_pb2.BouncyMessage, sender_key: RsaKey):
+        # print(self.host[1], '---H---', msg)
         if msg.HasField('connection_request'):
             await self.connection_manager.on_conn_request(msg.connection_request, sender_key)
         elif msg.HasField('connection_response'):
             await self.connection_manager.on_conn_response(msg.connection_response, sender_key)
         elif msg.HasField('channel_request'):
+            # print('>>>>>>>>', self.host[1])
             await self.connection_manager.on_channel_request(msg.channel_request, sender_key)
         elif msg.HasField('channel_response'):
             await self.connection_manager.on_channel_response(msg.channel_response, sender_key)
@@ -60,9 +62,10 @@ class BFCNode:
     async def main_loop(self):
         print('bfc start')
         while True:
+            # print(self.host[1], '>> before new messages await')
             new_messages = await self.traffic_manager.new_messages()
             for sender_key, msg in new_messages:
-                await self.handle_message(msg, sender_key)
+                asyncio.ensure_future(self.handle_message(msg, sender_key))
 
     def meets_requirements(self, end_node_requirement: bfcp_pb2.EndNodeRequirement) -> bool:
         if self.host is None:
