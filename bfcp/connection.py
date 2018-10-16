@@ -11,12 +11,15 @@ from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Signature import pkcs1_15
 
+import logger
 import protos.bfcp_pb2 as bfcp_pb2
 from Crypto.PublicKey.RSA import RsaKey
 
 from bfcp.protocol import pubkey_to_proto, proto_to_pubkey, get_node_pub_key
 from bfcp.messages import TrafficManager, NodeNotFoundError
 import utils
+
+_log = logger.getLogger(__name__)
 
 from config import *
 
@@ -192,7 +195,7 @@ class EndNodeConnection:
             data = await reader.read()
             if not data:
                 break
-            ensure_future(self.on_recv(data))
+            await self.on_recv(data)
 
     async def on_recv(self, data: bytes):
         # Send the data back to the OS
@@ -201,11 +204,12 @@ class EndNodeConnection:
         msg.payload = data
         for (uuid, key) in self._prev_hops:
             msg.channel_id.channel_uuid = uuid
-            ensure_future(self._traffic_manager.send(msg, key))
+            await self._traffic_manager.send(msg, key)
 
     async def send(self, data: bytes):
         _, writer = await self._reader_writer_future
         writer.write(data)
+        await writer.drain()
 
 
 class OriginalSenderConnection:
@@ -224,6 +228,7 @@ class OriginalSenderConnection:
         #: On established connection callbacks
         self._on_established: List[Callable[[Exception], None]] = []
         self._establish_event_fired = False
+        self._established_future: asyncio.Future = traffic_manager.get_loop().create_future()
 
         # Managers
         self._conn_manager = conn_manager
@@ -305,6 +310,7 @@ class OriginalSenderConnection:
             for callback in self._on_established:
                 # TODO how do we know what exceptions are raised when there's a failure?
                 callback(None)
+            self._established_future.set_result(True)
 
     def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
         if self._is_closed:
@@ -335,6 +341,7 @@ class OriginalSenderConnection:
             # Connection is ready to be closed
             self._close_internal()
 
+<<<<<<< HEAD
     async def send(self, data: bytes):
         print('sending')
         bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()
@@ -357,7 +364,8 @@ class OriginalSenderConnection:
         """
         Closes the connection with the target server.
         """
-        asyncio.ensure_future(self._send_internal(b''))
+        utils.run_coroutine_threadsafe_and_print(self._send_internal(b''),
+                                                 self._traffic_manager.get_loop())
         self._close_internal()
 
     def register_on_new_data(self, callback) -> None:

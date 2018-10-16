@@ -6,9 +6,10 @@ from Crypto.PublicKey import RSA
 
 from bfcp.node import BFCNode
 import protos.bfcp_pb2 as bfcp_pb2
+from protos.bfcp_pb2 import Node, NodeTable
 
 from http_proxy import HTTPProxyServer
-from config import HTTPProxyServerConfig
+from config import *
 
 
 from logger import getLogger
