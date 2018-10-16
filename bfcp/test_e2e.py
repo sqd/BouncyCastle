@@ -18,14 +18,16 @@ class EndToEndTests(unittest.TestCase):
         data_read = 0
         while data_read != 20:
             data = await reader.read(20 - data_read)
+            print('ECHO SERVER: ', data)
             writer.write(data)
             await writer.drain()
+            print('ECHO SERVER SENT')
             data_read += len(data)
         writer.close()
 
     def test_something(self):
         # Prepare the simulated machines
-        node1_port = 23141
+        node1_port = 43211
         node1_rsa_key = RSA.generate(2048)
         node1_info = Node()
         node1_info.public_key.CopyFrom(pubkey_to_proto(node1_rsa_key.publickey()))
@@ -33,7 +35,7 @@ class EndToEndTests(unittest.TestCase):
         node1_info.last_port = node1_port
         node1_info.country_code = 616  # Poland
 
-        node2_port = 23142
+        node2_port = 43212
         node2_rsa_key = RSA.generate(2048)
         node2_info = Node()
         node2_info.public_key.CopyFrom(pubkey_to_proto(node2_rsa_key.publickey()))
@@ -41,7 +43,7 @@ class EndToEndTests(unittest.TestCase):
         node2_info.last_port = node2_port
         node2_info.country_code = 496  # Mongolia
         
-        node3_port = 23143
+        node3_port = 43213
         node3_rsa_key = RSA.generate(2048)
         node3_info = Node()
         node3_info.public_key.CopyFrom(pubkey_to_proto(node3_rsa_key.publickey()))
@@ -49,7 +51,7 @@ class EndToEndTests(unittest.TestCase):
         node3_info.last_port = node3_port
         node3_info.country_code = 156  # China Mainland
         
-        node4_port = 23144
+        node4_port = 43214
         node4_rsa_key = RSA.generate(2048)
         node4_info = Node()
         node4_info.public_key.CopyFrom(pubkey_to_proto(node4_rsa_key.publickey()))
@@ -57,7 +59,7 @@ class EndToEndTests(unittest.TestCase):
         node4_info.last_port = node4_port
         node4_info.country_code = 356  # India
         
-        node5_port = 23145
+        node5_port = 43215
         node5_rsa_key = RSA.generate(2048)
         node5_info = Node()
         node5_info.public_key.CopyFrom(pubkey_to_proto(node5_rsa_key.publickey()))
@@ -65,7 +67,7 @@ class EndToEndTests(unittest.TestCase):
         node5_info.last_port = node5_port
         node5_info.country_code = 404  # Kenya
         
-        node6_port = 23146
+        node6_port = 43216
         node6_rsa_key = RSA.generate(2048)
         node6_info = Node()
         node6_info.public_key.CopyFrom(pubkey_to_proto(node6_rsa_key.publickey()))
@@ -88,7 +90,7 @@ class EndToEndTests(unittest.TestCase):
         node5 = BFCNode(node5_info, ('127.0.0.1', node5_port), node5_rsa_key, node_table)
         node6 = BFCNode(node6_info, ('127.0.0.1', node6_port), node6_rsa_key, node_table)
 
-        target_server_port = 23140
+        target_server_port = 43210
 
         async def start_scenario():
             target_server = await asyncio.start_server(
@@ -111,23 +113,29 @@ class EndToEndTests(unittest.TestCase):
             reqs.country = 840
             conn = node1.connection_manager.new_connection(reqs, ('127.0.0.1', target_server_port))
             sock = SocketConnection(conn)
+            print('WTF1')
             sock.sendall(b'01234')
+            print('WTF2')
             sock.sendall(b'56789')
+            print('WTF3')
             self.assertEqual(sock.recv_all(7), b'0123456')
             sock.sendall(b'01234')
+            print('WTF4')
             sock.sendall(b'56789')
+            print('WTF5')
             self.assertEqual(sock.recv_all(4), b'7890')
             self.assertEqual(sock.recv_all(9), b'123456789')
             sock.close()
-
-            node1._async_loop.stop()
+            print('WTF6')
+            node1.traffic_manager.get_loop().stop()
 
         thread = threading.Thread(target=user_thread)
         thread.start()
 
         print('Main thread id', threading.get_ident())
         asyncio.get_event_loop().set_debug(True)
-        asyncio.get_event_loop().run_until_complete(start_scenario())
+        asyncio.ensure_future(start_scenario())
+        asyncio.get_event_loop().run_forever()
 
 
 if __name__ == '__main__':

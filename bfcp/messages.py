@@ -141,7 +141,7 @@ class TrafficManager:
 
         _log.debug('Sending message: %s\nTo: %s\nLogged by: %s\nThread: %d', str(msg),
                    str(self._bfc.trust_table_manager.get_node_by_pubkey(send_to.get_peer_key())),
-                   str(self._bfc._self_node),
+                   str(self._bfc._self_node.last_port),
                    threading.get_ident())
         await send_to.send_bouncy_message(msg)
 

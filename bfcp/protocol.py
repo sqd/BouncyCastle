@@ -8,8 +8,10 @@ from Crypto.PublicKey.RSA import RsaKey
 from Crypto.Random import get_random_bytes
 from google.protobuf.message import Message
 
+import utils
+from protos import bfcp_pb2
 from protos.bfcp_pb2 import RsaChallenge, RsaChallengeResponse, RsaPubKey, PeerHello, AESKey, \
-    NodeTableEntry, EndNodeRequirement, AndRequirement, OrRequirement, Node
+    NodeTableEntry, EndNodeRequirement, AndRequirement, OrRequirement, Node, BouncyTcpMessage
 from utils import generate_aes_key, send_proto_msg, recv_proto_msg
 
 from config import *
@@ -125,6 +127,18 @@ def matches_requirements(node: Node, reqs: EndNodeRequirement) -> bool:
 
     # Empty requirement is always satisfied
     return True
+
+
+def extract_bouncy_tcp_msg(original_payload: bytes, session_key: bytes) -> BouncyTcpMessage:
+    bouncy_tcp_bytes = utils.aes_decrypt(original_payload, session_key)
+    msg = bfcp_pb2.BouncyTcpMessage()
+    msg.ParseFromString(bouncy_tcp_bytes)
+    return msg
+
+
+def encrypt_bouncy_tcp_msg(msg: BouncyTcpMessage, session_key: bytes) -> bytes:
+    bouncy_tcp_bytes = msg.SerializeToString()
+    return utils.aes_encrypt(bouncy_tcp_bytes, session_key)
 
 
 PEER_CONNECTION_KEY_SIZE = 256
