@@ -110,10 +110,10 @@ class ConnectionManager:
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
         print("connManager.on_conn_resp")
         receiver_type = self._check_conn_type(msg.uuid)
-        if receiver_type == ConnectionType.origin:
+        if msg.uuid in self._os_conn:
             print("on conn_response origin")
             await self._os_conn[msg.uuid].on_end_node_found(msg)
-        elif receiver_type == ConnectionType.relay:
+        elif msg.uuid in self._relay_conn_requests:
             print("on conn_response relay")
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
         else:
@@ -129,7 +129,7 @@ class ConnectionManager:
             resp = bfcp_pb2.ChannelResponse()
             resp.channel_id.channel_uuid = msg.channel_uuid
             resp.channel_id.connection_uuid = msg.connection_params.uuid
-            await self._traffic_manager.send(resp)
+            await self._traffic_manager.send(resp, sender_key)
         else:
             print('on_chann_request: neither')
             msg.connection_params.remaining_hops -= 1
@@ -148,11 +148,11 @@ class ConnectionManager:
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
         print("connManager.on_channel_response")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
-        if receiver_type == ConnectionType.origin:
+        if msg.channel_id.connection_uuid in self._os_conn:
             print("connManager.on_channel_response::origin")
             await self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_id.channel_uuid, sender_key)
             print("connManager.on_channel_response::origin end")
-        elif receiver_type == ConnectionType.relay:
+        elif msg.channel_id.channel_uuid in self._relay_channels:
             print("connManager.on_channel_response::relay")
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id.channel_uuid][0])
             print("connManager.on_channel_response::relay end")
@@ -166,7 +166,7 @@ class ConnectionManager:
             await self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
         elif receiver_type == ConnectionType.relay:
             dir_idx = 1 if isinstance(msg, bfcp_pb2.ToTargetServer) else 0
-            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id][dir_idx])
+            await self._traffic_manager.send(msg, self._relay_channels[msg.channel_id.channel_uuid][dir_idx])
         elif receiver_type == ConnectionType.end:
             await self._en_conn[msg.channel_id.connection_uuid][0].send(msg.payload)
 
@@ -204,7 +204,7 @@ class ConnectionManager:
 
         await gather(
             en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port)),
-            self._traffic_manager.send(conn_resp)
+            self._traffic_manager.send(conn_resp, sender_key)
         )
 
 
@@ -295,7 +295,8 @@ class OriginalSenderConnection:
         conn_request = bfcp_pb2.ConnectionRequest()
 
         conn_request.connection_params.uuid = self.uuid
-        conn_request.connection_params.remaining_hops = randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
+        conn_request.connection_params.remaining_hops = 3
+        # conn_request.connection_params.remaining_hops = randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
 
         conn_request.end_node_requirement.CopyFrom(en_requirement)
         conn_request.target_server_address = ts_address[0]
@@ -338,11 +339,13 @@ class OriginalSenderConnection:
             return
 
         self._channels.append((channel_uuid, next_hop_pub_key))
+        print('channel num: ', len(self._channels))
         if (not self._establish_event_fired) and \
-                len(self._channels) >= GLOBAL_VARS['MIN_CHANNELS_TO_FIRE_ESTABLISH_EVENT']:
+                len(self._channels) >= 1:
+            print('firing chann ev')
             self._establish_event_fired = True
-            await asyncio.gather(*[cb(self, None) for cb in self._on_established])
             self._established_future.set_result(True)
+            await asyncio.gather(*[asyncio.ensure_future(cb(self, None)) for cb in self._on_established])
         print('end chann established ev')
 
     async def on_payload_received(self, encrypted_msg: bfcp_pb2.ToOriginalSender, pubkey: RsaKey):
@@ -375,6 +378,7 @@ class OriginalSenderConnection:
             self._close_internal()
 
     async def send(self, data: bytes):
+        print('waiting for establisehd future')
         await self._established_future
         print('sending')
         bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()

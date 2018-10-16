@@ -13,16 +13,13 @@ from protos.bfcp_pb2 import NodeTable, Node, EndNodeRequirement
 
 async def _echo_server(reader: StreamReader, writer: StreamWriter):
     """Reads 20 bytes from the stream, outputs them back, and then closes the connection."""
-    data_read = 0
-    while data_read != 20:
-        data = await reader.read(20 - data_read)
-        writer.write(data)
+    print('------------- server running!')
+    while True:
+        writer.write(await reader.read(1))
         await writer.drain()
-        data_read += len(data)
-    writer.close()
 
 async def just_print(conn, s):
-    print("just print:", s)
+    print("---------just print:", s)
 
 async def test_something():
     # Prepare the simulated machines
@@ -103,7 +100,7 @@ async def test_something():
 
     target_server_port = 54360
 
-    target_server = await asyncio.start_server(_echo_server, '0.0.0.0', target_server_port)
+    await asyncio.start_server(_echo_server, '0.0.0.0', target_server_port)
 
     # Loop forever
     asyncio.ensure_future(asyncio.gather(
