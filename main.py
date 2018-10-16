@@ -10,6 +10,7 @@ from protos.bfcp_pb2 import Node, NodeTable
 from event_server import EventServer
 from http_proxy import HTTPProxyServer
 from config import *
+import asyncio
 
 
 from logger import getLogger
@@ -23,6 +24,8 @@ def main():
     def run_bfc():
         nonlocal bfc
         # TODO: `node.txt` and `node_table.txt`
+
+        asyncio.set_event_loop(asyncio.new_event_loop())
         node = ProtoIO.read_from_file('node.txt', Node())
         node_table = ProtoIO.read_from_file('node_table.txt', NodeTable())
         bfc = BFCNode(node, ("0.0.0.0", 9000), RSA.generate(2048), node_table)
