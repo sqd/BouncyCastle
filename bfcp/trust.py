@@ -148,6 +148,10 @@ class TrustTableManager:
         :raises ValueError if there is no node.
         :return: a random node.
         """
+        own_pub_key_index = pubkey_to_deterministic_string(self._bfc.rsa_key)
+        if own_pub_key_index in self._nodes:
+            del self._nodes[own_pub_key_index]
+
         if len(self._nodes) == 0:
             raise ValueError("No node in the trust table.")
         return self._nodes.random_value()

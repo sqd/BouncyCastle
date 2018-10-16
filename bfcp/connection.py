@@ -7,6 +7,7 @@ from uuid import uuid4
 from asyncio import ensure_future, open_connection, gather
 
 from Crypto.Cipher import PKCS1_OAEP
+from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 from Crypto.Signature import pkcs1_15
@@ -72,15 +73,16 @@ class ConnectionManager:
 
     async def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: RsaKey) -> None:
         msg.connection_params.remaining_hops -= 1
+        conn_uuid = msg.connection_params.uuid
         remaining_hops = msg.connection_params.remaining_hops
 
         async def send_randomly():
             next_node = self._trust_table.get_random_node()
-            if msg.conn_uuid in self._relay_conn_requests:
-                (prev_node, _) = self._relay_conn_requests[msg.conn_uuid]
-                self._relay_conn_requests[msg.conn_uuid] = (prev_node, get_node_pub_key(next_node))
+            if conn_uuid in self._relay_conn_requests:
+                (prev_node, _) = self._relay_conn_requests[conn_uuid]
+                self._relay_conn_requests[conn_uuid] = (prev_node, get_node_pub_key(next_node))
             else:
-                self._relay_conn_requests[msg.conn_uuid] = (sender_key, get_node_pub_key(next_node))
+                self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(next_node))
             await self._traffic_manager.send(msg, get_node_pub_key(next_node))
 
         if remaining_hops > 0:
@@ -96,7 +98,7 @@ class ConnectionManager:
                     else:
                         await send_randomly()
                 else:
-                    self._relay_conn_requests[msg.conn_uuid] = (sender_key, get_node_pub_key(node))
+                    self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(node))
                     await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
@@ -109,8 +111,8 @@ class ConnectionManager:
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
         if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key:
             # I am the end node
-            self._en_conn[msg.routing_params.connection_uuid][1].add((msg.channel_uuid, sender_key))
-        elif self._check_conn_type(msg.routing_params.connection_uuid) == ConnectionType.neither:
+            self._en_conn[msg.connection_params.uuid][1].add((msg.channel_uuid, sender_key))
+        elif self._check_conn_type(msg.connection_params.uuid) == ConnectionType.neither:
             msg.connection_params.remaining_hops -= 1
             next_node = self._trust_table.get_random_node().node \
                 if msg.connection_params.remaining_hops > 0 else msg.end_node
@@ -140,15 +142,16 @@ class ConnectionManager:
         Respond to a ConnectionRequest, saying that "I'll be the end node". And prepare to be one.
         """
         # solve the challenge
-        solved_challenge = pkcs1_15.new(self._bfc_node.rsa_key).sign(
-            conn_request.signature_challenge)
+        h = SHA256.new(conn_request.signature_challenge)
+        solved_challenge = pkcs1_15.new(self._bfc_node.rsa_key).sign(h)
 
         conn_resp = bfcp_pb2.ConnectionResponse()
         conn_resp.uuid = conn_request.connection_params.uuid
         conn_resp.selected_end_node.public_key.CopyFrom(
             pubkey_to_proto(self._bfc_node.rsa_key.publickey()))
         conn_resp.selected_end_node.last_known_address = self._bfc_node.host[0]
-        conn_resp.selected_end_node.last_known_port = self._bfc_node.host[1]
+        conn_resp.selected_end_node.last_port = self._bfc_node.host[1]
+        print('Im end noding!', self._bfc_node.host)
 
         conn_resp.signature_challenge_response = solved_challenge
 
@@ -162,10 +165,9 @@ class ConnectionManager:
 
         prev_hops = set()
         en_conn = EndNodeConnection(self._traffic_manager,
-                                    conn_request.routing_params.uuid,
-                                    conn_request.channel_uuid,
+                                    conn_request.connection_params.uuid,
                                     prev_hops)
-        self._en_conn[conn_request.routing_params.uuid] = (en_conn, prev_hops)
+        self._en_conn[conn_request.connection_params.uuid] = (en_conn, prev_hops)
 
         gather(
             en_conn.initiate_connection((conn_request.target_server_address, conn_request.target_server_port)),
@@ -174,10 +176,9 @@ class ConnectionManager:
 
 
 class EndNodeConnection:
-    def __init__(self, tm: TrafficManager, conn_uuid: str, channel_uuid: str, prev_hops: Set[Tuple[str, RsaKey]]):
+    def __init__(self, tm: TrafficManager, conn_uuid: str, prev_hops: Set[Tuple[str, RsaKey]]):
         self._traffic_manager = tm
         self._conn_uuid = conn_uuid
-        self._channel_uuid = channel_uuid
         self._prev_hops = prev_hops
         self._reader_writer_future = None
 
@@ -275,7 +276,7 @@ class OriginalSenderConnection:
 
         # Verify the challenge
         end_node_key = proto_to_pubkey(conn_resp.selected_end_node.public_key)
-        pkcs1_15.new(end_node_key).verify(self._challenge_bytes,
+        pkcs1_15.new(end_node_key).verify(SHA256.new(self._challenge_bytes),
                                           conn_resp.signature_challenge_response)
 
         rsa_cipher = PKCS1_OAEP.new(self._sender_connection_key)
@@ -287,8 +288,8 @@ class OriginalSenderConnection:
             channel_request = bfcp_pb2.ChannelRequest()
             channel_request.end_node.CopyFrom(conn_resp.selected_end_node)
             channel_request.channel_uuid = channel_uuid
-            channel_request.routing_params.uuid = self.uuid
-            channel_request.routing_params.remaining_hops = self._make_channel_length()
+            channel_request.connection_params.uuid = self.uuid
+            channel_request.connection_params.remaining_hops = self._make_channel_length()
 
             await self._traffic_manager.send(channel_request)
 

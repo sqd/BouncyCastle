@@ -25,7 +25,7 @@ class EndToEndTests(unittest.TestCase):
 
     def test_something(self):
         # Prepare the simulated machines
-        node1_port = 54361
+        node1_port = 14451
         node1_rsa_key = RSA.generate(2048)
         node1_info = Node()
         node1_info.public_key.CopyFrom(pubkey_to_proto(node1_rsa_key.publickey()))
@@ -33,7 +33,7 @@ class EndToEndTests(unittest.TestCase):
         node1_info.last_port = node1_port
         node1_info.country_code = 616  # Poland
 
-        node2_port = 54362
+        node2_port = 14452
         node2_rsa_key = RSA.generate(2048)
         node2_info = Node()
         node2_info.public_key.CopyFrom(pubkey_to_proto(node2_rsa_key.publickey()))
@@ -41,7 +41,7 @@ class EndToEndTests(unittest.TestCase):
         node2_info.last_port = node2_port
         node2_info.country_code = 496  # Mongolia
         
-        node3_port = 54363
+        node3_port = 14453
         node3_rsa_key = RSA.generate(2048)
         node3_info = Node()
         node3_info.public_key.CopyFrom(pubkey_to_proto(node3_rsa_key.publickey()))
@@ -49,7 +49,7 @@ class EndToEndTests(unittest.TestCase):
         node3_info.last_port = node3_port
         node3_info.country_code = 156  # China Mainland
         
-        node4_port = 54364
+        node4_port = 14454
         node4_rsa_key = RSA.generate(2048)
         node4_info = Node()
         node4_info.public_key.CopyFrom(pubkey_to_proto(node4_rsa_key.publickey()))
@@ -57,7 +57,7 @@ class EndToEndTests(unittest.TestCase):
         node4_info.last_port = node4_port
         node4_info.country_code = 356  # India
         
-        node5_port = 54365
+        node5_port = 14455
         node5_rsa_key = RSA.generate(2048)
         node5_info = Node()
         node5_info.public_key.CopyFrom(pubkey_to_proto(node5_rsa_key.publickey()))
@@ -65,7 +65,7 @@ class EndToEndTests(unittest.TestCase):
         node5_info.last_port = node5_port
         node5_info.country_code = 404  # Kenya
         
-        node6_port = 54366
+        node6_port = 14456
         node6_rsa_key = RSA.generate(2048)
         node6_info = Node()
         node6_info.public_key.CopyFrom(pubkey_to_proto(node6_rsa_key.publickey()))
@@ -88,7 +88,7 @@ class EndToEndTests(unittest.TestCase):
         node5 = BFCNode(node5_info, ('127.0.0.1', node5_port), node5_rsa_key, node_table)
         node6 = BFCNode(node6_info, ('127.0.0.1', node6_port), node6_rsa_key, node_table)
 
-        target_server_port = 54360
+        target_server_port = 14450
 
         async def start_scenario():
             target_server = await asyncio.start_server(
