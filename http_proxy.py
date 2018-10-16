@@ -216,7 +216,9 @@ class _WorkerSession:
         self._bfc_conn.send(s)
 
     def start(self):
+        _log.info("Relaying to %s.", self._location)
         self._bfc_conn = self._bfc.new_connection(None, self._location)
+        _log.info("%s: got BFC connection.", self._location)
         self._bfc_conn.register_on_new_data(self.recv_callback)
 
     def recv_callback(self, s: bytes):
