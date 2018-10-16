@@ -112,10 +112,9 @@ class TrafficManager:
             node = self._bfc.trust_table_manager.get_random_node()
             pub_key = get_node_pub_key(node)
 
-        _log.debug('Sending message: %s To: %s Logged by: %s Thread: %d', msg.WhichOneof('message'),
-                   self._bfc.trust_table_manager.get_node_by_pubkey(pub_key).node.last_port,
+        _log.debug('Sending message: %s  %s->%s', msg.WhichOneof('message'),
                    self._bfc.trust_table_manager.get_node_by_pubkey(self._own_rsa_key).node.last_port,
-                   threading.get_ident())
+                   self._bfc.trust_table_manager.get_node_by_pubkey(pub_key).node.last_port)
 
         pub_key_index = pubkey_to_deterministic_string(pub_key)
         if pub_key_index in self._open_client_sockets:
@@ -179,10 +178,9 @@ class TrafficManager:
             return await self.new_messages()
         else:
             for pub_key, msg in msgs:
-                _log.debug('Received message: %s From: %s Logged by: %s Thread: %d', msg.WhichOneof('message'),
-                           self._bfc.trust_table_manager.get_node_by_pubkey(pub_key).node.last_port,
+                _log.debug('Received message: %s  %s<-%s', msg.WhichOneof('message'),
                            self._bfc.trust_table_manager.get_node_by_pubkey(self._own_rsa_key).node.last_port,
-                           threading.get_ident())
+                           self._bfc.trust_table_manager.get_node_by_pubkey(pub_key).node.last_port)
             return msgs
 
     def _register_server_socket_handler(self, socket_handler: BfcpSocketHandler):

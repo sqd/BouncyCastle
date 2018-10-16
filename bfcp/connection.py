@@ -43,7 +43,7 @@ class ConnectionManager:
 
         #: Connections for which this node is the end node.
         # uuid(str) -> (EndNodeConnection, set of (prev channel uuid, prev channel hop))
-        self._en_conn: Dict[str, Tuple[EndNodeConnection, Set[Tuple[str, RsaKey]]]] = dict()
+        self._en_conn: Dict[str, Tuple[EndNodeConnection, List[Tuple[str, RsaKey]]]] = dict()
 
         #: Connection requests that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_conn_requests: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
@@ -117,16 +117,25 @@ class ConnectionManager:
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
         print("connManager.on_channe_req")
-        if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key:
+        if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key.publickey():
             # I am the end node
-            self._en_conn[msg.connection_params.uuid][1].add((msg.channel_uuid, sender_key))
-        elif self._check_conn_type(msg.connection_params.uuid) == ConnectionType.neither:
+            print('on_chann_request: I\'m the end node')
+            self._en_conn[msg.connection_params.uuid][1].append((msg.channel_uuid, sender_key))
+
+            resp = bfcp_pb2.ChannelResponse()
+            resp.channel_id.channel_uuid = msg.channel_uuid
+            resp.channel_id.connection_uuid = msg.connection_params.uuid
+            await self._traffic_manager.send(resp)
+        else:
+            print('on_chann_request: neither')
             msg.connection_params.remaining_hops -= 1
             next_node = self._trust_table.get_random_node().node \
                 if msg.connection_params.remaining_hops > 0 else msg.end_node
+            self._relay_channels[msg.channel_uuid] = (sender_key, proto_to_pubkey(next_node.public_key))
 
-            self._relay_channels[msg.channel_uuid] = (sender_key, get_node_pub_key(next_node))
+            print('before on_chann_request await')
             await self._traffic_manager.send(msg, proto_to_pubkey(next_node.public_key))
+            print('after on_chann_request await')
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
         print("connManager.on_channel_res")
@@ -173,7 +182,7 @@ class ConnectionManager:
         encrypted_session_key = cipher_rsa.encrypt(session_key)
         conn_resp.session_key.key = encrypted_session_key
 
-        prev_hops = set()
+        prev_hops = []
         en_conn = EndNodeConnection(self._traffic_manager,
                                     conn_request.connection_params.uuid,
                                     prev_hops)
@@ -294,8 +303,7 @@ class OriginalSenderConnection:
         self._session_key = rsa_cipher.decrypt(conn_resp.session_key.key)
 
         # Found an EN, now try to establish channels
-        print('========', GLOBAL_VARS['CHANNELS_PER_CONNECTION'])
-        for i in range(GLOBAL_VARS['CHANNELS_PER_CONNECTION']):
+        for i in range(1):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
             channel_request.end_node.CopyFrom(conn_resp.selected_end_node)
