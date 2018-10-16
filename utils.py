@@ -10,9 +10,11 @@ from typing import Generic, TypeVar, Optional
 
 from Crypto import Random
 from Crypto.Cipher import AES
+from Crypto.PublicKey import RSA
+from Crypto.PublicKey.RSA import RsaKey
 from google.protobuf.message import Message
 
-from protos.bfcp_pb2 import NodeTableEntry
+from protos.bfcp_pb2 import NodeTableEntry, RsaPubKey
 
 T = TypeVar('T')
 
@@ -178,3 +180,17 @@ def run_coroutine_threadsafe_and_print(coro, loop):
             print(coro, traceback.format_exc())
 
     asyncio.run_coroutine_threadsafe(wrapper_coro(), loop=loop)
+
+
+def _int_to_bytes(n: int) -> bytes:
+    return n.to_bytes(max(1, (n.bit_length() + 7) // 8), 'big')
+
+
+def pubkey_to_proto(key: RsaKey) -> RsaPubKey:
+    """
+    Converts the given RSA Key into an RsaPubKey proto message.
+    """
+    message = RsaPubKey()
+    message.modulus = _int_to_bytes(key.n)
+    message.pub_exponent = _int_to_bytes(key.e)
+    return message
