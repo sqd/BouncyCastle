@@ -22,9 +22,9 @@ def main():
 
     def run_bfc():
         nonlocal bfc
+        # TODO: `node.txt` and `node_table.txt`
         node = ProtoIO.read_from_file('node.txt', Node())
         node_table = ProtoIO.read_from_file('node_table.txt', NodeTable())
-        # TODO: node.txt and node_table.txt are empty atm
         bfc = BFCNode(node, ("0.0.0.0", 9000), RSA.generate(2048), node_table)
         bfc.run()
 
