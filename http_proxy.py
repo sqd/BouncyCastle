@@ -98,6 +98,7 @@ class _Worker(EventConsumer):
             self.terminate()
         elif isinstance(parse_result, HTTPRequestHeader):
             header = parse_result
+            print('FINDME2', header.location)
             if header.method != b"CONNECT":
                 # if we are not doing HTTP CONNECT, then the header consumed is also a part of the request. (after
                 # conversion to non-proxy header)
@@ -108,7 +109,7 @@ class _Worker(EventConsumer):
             port = header.location.port if header.location.port else 80
             self._state = _WorkerState.RELAYING
             self._http_body_parser = HTTPBodyParser(header)
-            self._cur_session = _WorkerSession((header.location.netloc, port), self, self._bfc)
+            self._cur_session = _WorkerSession((header.location.hostname, port), self, self._bfc)
             self._cur_session.start()
             self._handle_relaying(ev)
 
@@ -119,6 +120,7 @@ class _Worker(EventConsumer):
             # but first, I need to determine if all the data belong to the current session.
             parse_result = self._http_body_parser.feed(self._client_recv_buf)
             if parse_result == HTTPParseStatus.PARTIAL:
+                print('FINEME3', self._client_recv_buf)
                 self._cur_session.send(self._client_recv_buf)
                 self._client_recv_buf = b""
             elif parse_result == HTTPParseStatus.ERROR:
@@ -149,6 +151,7 @@ class _Worker(EventConsumer):
             except socket.error as e:
                 if e.errno != errno.EAGAIN:
                     raise e
+            print('FINDME', self._client_recv_buf)
 
         if ev & select.EPOLLOUT:
             self._client_writable = True
@@ -218,7 +221,7 @@ class _WorkerSession:
 
     def start(self):
         _log.info("Relaying to %s.", self._location)
-        self._bfc_conn = self._bfc.new_connection(EndNodeRequirement(), self._location)
+        self._bfc_conn = self._bfc.new_connection(EndNodeRequirement(country=840), self._location)
         _log.info("%s: got BFC connection.", self._location)
         self._bfc_conn.register_on_new_data(self.recv_callback)
 

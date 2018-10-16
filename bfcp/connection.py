@@ -236,8 +236,8 @@ class EndNodeConnection:
         if self._tcp_state.should_close_connection():
             writer.close()
 
-    def _close(self):
-        self._send_to_original_sender(b'')
+    async def _close(self):
+        await self._send_to_original_sender(b'')
 
 
 class OriginalSenderConnection:
@@ -362,6 +362,7 @@ class OriginalSenderConnection:
         """
         Sends the specified data to the target server. This is a non-blocking call
         """
+        print('SENDINGSTUFFS', data)
         if data != b'':
             utils.run_coroutine_threadsafe_and_print(self._send_internal(data),
                                                      self._traffic_manager.get_loop())
