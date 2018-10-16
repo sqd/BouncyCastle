@@ -43,12 +43,12 @@ class ConnectionManager:
 
         #: Connections for which this node is the end node.
         # uuid(str) -> (EndNodeConnection, set of (prev channel uuid, prev channel hop))
-        self._en_conn: Dict[str, Tuple[EndNodeConnection, Set[Tuple[str, RsaKey]]]] = dict()
+        self._en_conn: Dict[str, Tuple[EndNodeConnection, List[Tuple[str, RsaKey]]]] = dict()
 
         #: Connection requests that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
         self._relay_conn_requests: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
-        #: Channels that pass through this node. uuid(str) -> (pub key of prev hop, pub key of next hop)
-        self._relay_channels: Dict[str, Tuple[RsaKey, RsaKey]] = dict()
+        #: Channels that pass through this node. (conn_uuid(str), channel_uuid(str)) -> (pub key of prev hop, pub key of next hop)
+        self._relay_channels: Dict[Tuple[str, str], Tuple[RsaKey, RsaKey]] = dict()
 
     def _check_conn_type(self, conn_uuid: str) -> ConnectionType:
         """
@@ -65,6 +65,16 @@ class ConnectionManager:
         else:
             return ConnectionType.neither
 
+    def _check_channel_type(self, channel_id: bfcp_pb2.ChannelID) -> ConnectionType:
+        if channel_id.connection_uuid in self._os_conn:
+            return ConnectionType.origin
+        elif channel_id.connection_uuid in self._en_conn:
+            return ConnectionType.end
+        elif (channel_id.connection_uuid, channel_id.channel_uuid) in self._relay_channels:
+            return ConnectionType.relay
+        else:
+            return ConnectionType.neither
+
     def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'OriginalSenderConnection':
         conn = OriginalSenderConnection(self, self._traffic_manager)
         conn.initiate_connection(en_requirement, addr)
@@ -76,30 +86,24 @@ class ConnectionManager:
         conn_uuid = msg.connection_params.uuid
         remaining_hops = msg.connection_params.remaining_hops
 
-        async def send_randomly():
+        next_node = None
+        if remaining_hops > 0:
             next_node = self._trust_table.get_random_node()
+        elif not self._bfc_node.meets_requirements(msg.end_node_requirement):
+            next_node = self._trust_table.get_node_with_requirement(msg.end_node_requirement)
+            if next_node is None:
+                if remaining_hops < -GLOBAL_VARS['MAX_HOPS_WITHOUT_END_NODE']:
+                    raise NodeNotFoundError('A node suitable for becoming EN was not found')
+
+        if next_node is None:
+            await self._become_end_node(msg, sender_key)
+        else:
             if conn_uuid in self._relay_conn_requests:
                 (prev_node, _) = self._relay_conn_requests[conn_uuid]
                 self._relay_conn_requests[conn_uuid] = (prev_node, get_node_pub_key(next_node))
             else:
                 self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(next_node))
             await self._traffic_manager.send(msg, get_node_pub_key(next_node))
-
-        if remaining_hops > 0:
-            await send_randomly()
-        else:
-            if self._bfc_node.meets_requirements(msg.end_node_requirement):
-                await self._become_end_node(msg, sender_key)
-            else:
-                node = self._trust_table.get_node_with_requirement(msg.end_node_requirement)
-                if node is None:
-                    if remaining_hops < -GLOBAL_VARS['MAX_HOPS_WITHOUT_END_NODE']:
-                        raise NodeNotFoundError('A node suitable for becoming EN was not found')
-                    else:
-                        await send_randomly()
-                else:
-                    self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(node))
-                    await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
         receiver_type = self._check_conn_type(msg.uuid)
@@ -109,15 +113,24 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
-        if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key:
+        channel_id = bfcp_pb2.ChannelID()
+        channel_id.connection_uuid = msg.connection_params.uuid
+        channel_id.channel_uuid = msg.channel_uuid
+
+        channel_type = self._check_channel_type(channel_id)
+        print('OnChannelRequest', channel_type)
+        if channel_type == ConnectionType.end:
             # I am the end node
-            self._en_conn[msg.connection_params.uuid][1].add((msg.channel_uuid, sender_key))
-        elif self._check_conn_type(msg.connection_params.uuid) == ConnectionType.neither:
+            self._en_conn[msg.connection_params.uuid][1].append((msg.channel_uuid, sender_key))
+            response = bfcp_pb2.ChannelResponse()
+            response.channel_id.CopyFrom(channel_id)
+            await self._traffic_manager.send(response, sender_key)
+        elif channel_type == ConnectionType.neither:
             msg.connection_params.remaining_hops -= 1
             next_node = self._trust_table.get_random_node().node \
                 if msg.connection_params.remaining_hops > 0 else msg.end_node
 
-            self._relay_channels[msg.channel_uuid] = (sender_key, get_node_pub_key(next_node))
+            self._relay_channels[msg.channel_uuid] = (sender_key, proto_to_pubkey(next_node.public_key))
             await self._traffic_manager.send(msg, proto_to_pubkey(next_node.public_key))
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
@@ -163,7 +176,8 @@ class ConnectionManager:
         encrypted_session_key = cipher_rsa.encrypt(session_key)
         conn_resp.session_key.key = encrypted_session_key
 
-        prev_hops = set()
+        # TODO: prev hops and en_conn are bound. This is quite nasty and hard to read.
+        prev_hops = []
         en_conn = EndNodeConnection(self._traffic_manager,
                                     conn_request.connection_params.uuid,
                                     prev_hops)
@@ -176,7 +190,7 @@ class ConnectionManager:
 
 
 class EndNodeConnection:
-    def __init__(self, tm: TrafficManager, conn_uuid: str, prev_hops: Set[Tuple[str, RsaKey]]):
+    def __init__(self, tm: TrafficManager, conn_uuid: str, prev_hops: List[Tuple[str, RsaKey]]):
         self._traffic_manager = tm
         self._conn_uuid = conn_uuid
         self._prev_hops = prev_hops
