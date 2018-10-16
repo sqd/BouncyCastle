@@ -100,7 +100,11 @@ class ConnectionManager:
                     else:
                         await send_randomly()
                 else:
-                    self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(node))
+                    if conn_uuid in self._relay_conn_requests:
+                        (prev_node, _) = self._relay_conn_requests[conn_uuid]
+                        self._relay_conn_requests[conn_uuid] = (prev_node, get_node_pub_key(next_node))
+                    else:
+                        self._relay_conn_requests[conn_uuid] = (sender_key, get_node_pub_key(node))
                     await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
@@ -290,6 +294,7 @@ class OriginalSenderConnection:
         self._session_key = rsa_cipher.decrypt(conn_resp.session_key.key)
 
         # Found an EN, now try to establish channels
+        print('========', GLOBAL_VARS['CHANNELS_PER_CONNECTION'])
         for i in range(GLOBAL_VARS['CHANNELS_PER_CONNECTION']):
             channel_uuid = str(uuid4())
             channel_request = bfcp_pb2.ChannelRequest()
