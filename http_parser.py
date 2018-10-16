@@ -182,7 +182,10 @@ class HTTPHeaderParser:
         2. change headers to dict
         """
         try:
-            self._parse_result.location = urlparse.urlparse(self._parse_result.uri.decode("ascii"))
+            s_uri = self._parse_result.uri.decode("ascii")
+            if 'http://' not in s_uri and 'https://' not in s_uri:
+                s_uri = 'http://' + s_uri
+            self._parse_result.location = urlparse.urlparse(s_uri)
         except (ValueError, UnicodeDecodeError) as e:
             self._parse_result = HTTPParseStatus.ERROR
             return

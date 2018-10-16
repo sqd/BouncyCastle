@@ -104,6 +104,8 @@ class _Worker(EventConsumer):
                 # conversion to non-proxy header)
                 header.unproxify()
                 self._client_recv_buf = header.reconstruct() + self._client_recv_buf
+            else:
+                self._client_send_buf = b'HTTP/1.1 200 OK\r\n\r\n'
 
             # This is the best we can do. Because HTTPS should use CONNECT anyway.
             port = header.location.port if header.location.port else 80
