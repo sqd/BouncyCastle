@@ -40,21 +40,22 @@ class BFCNode:
         return await self.connection_manager.new_connection(en_requirement, addr)
 
     async def handle_message(self, msg: bfcp_pb2.BouncyMessage, sender_key: RsaKey):
-        print("handle message ", msg.WhichOneof('message'))
-        if isinstance(msg, bfcp_pb2.ConnectionRequest):
-            await self.connection_manager.on_conn_request(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.ConnectionResponse):
-            await self.connection_manager.on_conn_response(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.ChannelRequest):
-            await self.connection_manager.on_channel_request(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.ChannelResponse):
-            await self.connection_manager.on_channel_response(msg, sender_key)
-        elif isinstance(msg, (bfcp_pb2.ToTargetServer, bfcp_pb2.ToOriginalSender)):
-            await self.connection_manager.on_payload_received(msg, sender_key)
-        elif isinstance(msg, bfcp_pb2.DiscoveryRequest):
+        if msg.HasField('connection_request'):
+            await self.connection_manager.on_conn_request(msg.connection_request, sender_key)
+        elif msg.HasField('connection_response'):
+            await self.connection_manager.on_conn_response(msg.connection_response, sender_key)
+        elif msg.HasField('channel_request'):
+            await self.connection_manager.on_channel_request(msg.channel_request, sender_key)
+        elif msg.HasField('channel_response'):
+            await self.connection_manager.on_channel_response(msg.channel_response, sender_key)
+        elif msg.HasField('to_original_sender'):
+            await self.connection_manager.on_payload_received(msg.to_original_sender, sender_key)
+        elif msg.HasField('to_target_server'):
+            await self.connection_manager.on_payload_received(msg.to_target_server, sender_key)
+        elif msg.HasField('discovery_request'):
             await self.trust_table_manager.run_task(SendNodeTableTask(sender_key))
-        elif isinstance(msg, bfcp_pb2.NodeTable):
-            await self.trust_table_manager.run_task(MergeNodeTableTask(sender_key, msg))
+        elif msg.HasField('node_table'):
+            await self.trust_table_manager.run_task(MergeNodeTableTask(sender_key, msg.node_table))
 
     async def main_loop(self):
         print('bfc start')

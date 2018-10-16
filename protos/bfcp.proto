@@ -193,7 +193,7 @@ message ConnectionResponse {
 // so that the messages can be resent through the same path.
 message ChannelRequest {
     Node end_node = 1;
-    ConnectionRoutingParams routing_params = 2;
+    ConnectionRoutingParams connection_params = 2;
     string channel_uuid = 3;
 }
 
