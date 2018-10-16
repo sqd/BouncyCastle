@@ -4,6 +4,7 @@ import json
 from protos.bfcp_pb2 import BouncyMessage, Node, NodeTable, NodeTableEntry, RsaPubKey
 from google.protobuf import text_format
 from Crypto.PublicKey.RSA import RsaKey
+from utils import _int_to_bytes, pubkey_to_proto
 
 """ GLOBAL VARIABLES """
 GLOBAL_VARS = None
@@ -19,19 +20,6 @@ class HTTPProxyServerConfig:
     def __init__(self, listen_address: List[Tuple[str, int]]):
         self.listen_address = listen_address
         """A list of tuple (address:str, port:int) specifying the locations the server should listen on."""
-
-''' Helper functions '''
-def _int_to_bytes(n: int) -> bytes:
-    return n.to_bytes(max(1, (n.bit_length() + 7) // 8), 'big')
-
-def pubkey_to_proto(key: RsaKey) -> RsaPubKey:
-    """
-    Converts the given RSA Key into an RsaPubKey proto message.
-    """
-    message = RsaPubKey()
-    message.modulus = _int_to_bytes(key.n)
-    message.pub_exponent = _int_to_bytes(key.e)
-    return message
 
 class ProtoIO:
     """
@@ -64,14 +52,14 @@ class ProtoIO:
         file.close()
 
     @staticmethod
-    def create_write_node(key: RsaKey, country_code: int, address: str, port: int, file_path: str):
+    def create_write_node(key: RsaKey, country_code: int, address: str, port: int, file_path: str) -> None:
         """
-        Writes a node textfile given arguments
+        Writes a Node textfile given arguments
         :param key:
         :param country_code:
         :param address:
         :param port:
-        :return:
+        :return: None
         """
         node = Node()
         node.public_key.CopyFrom(pubkey_to_proto(key))
@@ -79,4 +67,17 @@ class ProtoIO:
         node.last_known_address = address
         node.last_port = port
         ProtoIO.write_to_file(file_path, node)
+
+    @staticmethod
+    def create_write_nodetable(node_entries: List[NodeTableEntry], file_path: str) -> None:
+        """
+        Writes a NodeTable textfile given list of NodeTableEntry
+        :param node_entries:
+        :return: None
+        """
+        node_table = NodeTable()
+        node_table.entries.extend(node_entries)
+        ProtoIO.write_to_file(file_path, node_table)
+
+
 

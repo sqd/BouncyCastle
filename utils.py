@@ -7,9 +7,11 @@ from typing import Generic, TypeVar, Optional
 
 from Crypto import Random
 from Crypto.Cipher import AES
+from Crypto.PublicKey import RSA
+from Crypto.PublicKey.RSA import RsaKey
 from google.protobuf.message import Message
 
-from protos.bfcp_pb2 import NodeTableEntry
+from protos.bfcp_pb2 import NodeTableEntry, RsaPubKey
 
 T = TypeVar('T')
 
@@ -150,3 +152,15 @@ async def recv_proto_msg(reader: StreamReader, to_merge: Message, max_message_le
     if aes_key is not None:
         message_bytes = aes_decrypt(message_bytes, aes_key)
     to_merge.ParseFromString(message_bytes)
+
+def _int_to_bytes(n: int) -> bytes:
+    return n.to_bytes(max(1, (n.bit_length() + 7) // 8), 'big')
+
+def pubkey_to_proto(key: RsaKey) -> RsaPubKey:
+    """
+    Converts the given RSA Key into an RsaPubKey proto message.
+    """
+    message = RsaPubKey()
+    message.modulus = _int_to_bytes(key.n)
+    message.pub_exponent = _int_to_bytes(key.e)
+    return message
