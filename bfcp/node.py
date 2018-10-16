@@ -27,14 +27,17 @@ class BFCNode:
         self.host = host
         self.rsa_key = rsa_key
 
-    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int])->OriginalSenderConnection:
+    async def start(self):
+        await self.traffic_manager.start()
+
+    async def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int])->OriginalSenderConnection:
         """
         Request a new connection through the BFC network.
         :param en_requirement: the requirement of the end node.
         :param addr: the address to connect to.
         :return: A BFC connection (that may not have been established yet!)
         """
-        return self.connection_manager.new_connection(en_requirement, addr)
+        return await self.connection_manager.new_connection(en_requirement, addr)
 
     async def handle_message(self, msg: bfcp_pb2.BouncyMessage, sender_key: RsaKey):
         if isinstance(msg, bfcp_pb2.ConnectionRequest):
@@ -53,20 +56,11 @@ class BFCNode:
             await self.trust_table_manager.run_task(MergeNodeTableTask(sender_key, msg))
 
     async def main_loop(self):
+        print('bfc start')
         while True:
             new_messages = await self.traffic_manager.new_messages()
             for sender_key, msg in new_messages:
                 await self.handle_message(msg, sender_key)
-
-    def run(self)->None:
-        """
-        Spin up ths BFC node.
-        """
-        asyncio.ensure_future(self.main_loop())
-        try:
-            self._async_loop.run_forever()
-        finally:
-            self._async_loop.close()
 
     def meets_requirements(self, end_node_requirement: bfcp_pb2.EndNodeRequirement) -> bool:
         if self.host is None:

@@ -132,7 +132,7 @@ class TrustTableManager:
         """
         Returns a NodeTableEntry with the pub key, else return None
         """
-        return self._nodes.get(pub_key, None)
+        return self._nodes.get(pubkey_to_deterministic_string(pub_key), None)
 
     def get_node_with_requirement(self, en_requirement: bfcp_pb2.EndNodeRequirement) -> Optional[bfcp_pb2.NodeTableEntry]:
         """Returns a node public key, given EndNodeRequirement like location must be in China"""

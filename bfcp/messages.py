@@ -9,7 +9,7 @@ from typing import Optional, Dict, Tuple, List
 
 from Crypto.PublicKey.RSA import RsaKey
 
-from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string, pubkey_to_proto
+from bfcp.protocol import PeerHandshake, pubkey_to_deterministic_string, pubkey_to_proto, get_node_pub_key
 from bfcp.trust import TrustTableManager
 from protos.bfcp_pb2 import BouncyMessage
 
@@ -94,24 +94,20 @@ class TrafficManager:
         self._open_client_sockets: Dict[bytes, BfcpSocketHandler] = {}
         self._open_server_sockets: Dict[bytes, BfcpSocketHandler] = {}
 
+    async def start(self):
         if self._serving_host is not None:
-            self._server = self._async_loop.run_until_complete(
-                asyncio.start_server(
-                    lambda reader, writer: self._on_new_server_socket(reader, writer),
-                    self._serving_host[0], self._serving_host[1], loop=self._async_loop)
-            )
+            print('listening on ',self._serving_host )
+            await asyncio.start_server(self._on_new_server_socket, self._serving_host[0], self._serving_host[1]) 
 
     async def send(self, msg: BouncyMessage, pub_key: Optional[RsaKey] = None) -> None:
         """
         Sends the provided BouncyMessage to the node in the network identified by the given public
         key. It's also possible to send a message to the node itself.
         """
-        _log.debug('Sending message: %s\nTo: %s\nLogged by: %s\nThread: %d', str(msg),
-                   str(pubkey_to_proto(pub_key)),
-                   str(pubkey_to_proto(self._own_rsa_key.publickey())),
-                   threading.get_ident())
+        print('TM.send')
         if pub_key is None:
-            pub_key = self._bfc.traffic_manager.get_random_node()
+            pub_key = get_node_pub_key(self._bfc.trust_table_manager.get_random_node())
+        print('sending to ', pub_key)
         pub_key_index = pubkey_to_deterministic_string(pub_key)
         if pub_key_index in self._open_client_sockets:
             await self._open_client_sockets[pub_key_index].send_bouncy_message(msg)

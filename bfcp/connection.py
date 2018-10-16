@@ -61,13 +61,15 @@ class ConnectionManager:
         else:
             return ConnectionType.neither
 
-    def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'OriginalSenderConnection':
+    async def new_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, addr: Tuple[str, int]) -> 'OriginalSenderConnection':
         conn = OriginalSenderConnection(self, self._traffic_manager)
-        conn.initiate_connection(en_requirement, addr)
+        print('ConnManager.new_connection')
+        await conn.initiate_connection(en_requirement, addr)
         self._os_conn[conn.uuid] = conn
         return conn
 
     async def on_conn_request(self, msg: bfcp_pb2.ConnectionRequest, sender_key: RsaKey) -> None:
+        print("connManager.on_conn_request")
         msg.connection_params.remaining_hops -= 1
         remaining_hops = msg.connection_params.remaining_hops
 
@@ -97,6 +99,7 @@ class ConnectionManager:
                     await self._traffic_manager.send(msg, get_node_pub_key(node))
 
     async def on_conn_response(self, msg: bfcp_pb2.ConnectionResponse, sender_key: RsaKey):
+        print("connManager.on_conn_res")
         receiver_type = self._check_conn_type(msg.uuid)
         if receiver_type == ConnectionType.origin:
             await self._os_conn[msg.uuid].on_end_node_found(msg)
@@ -104,6 +107,7 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, self._relay_conn_requests[msg.uuid][0])
 
     async def on_channel_request(self, msg: bfcp_pb2.ChannelRequest, sender_key: RsaKey):
+        print("connManager.on_channe_req")
         if proto_to_pubkey(msg.end_node.public_key) == self._bfc_node.rsa_key:
             # I am the end node
             self._en_conn[msg.routing_params.connection_uuid][1].add((msg.channel_uuid, sender_key))
@@ -116,6 +120,7 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, proto_to_pubkey(next_node.public_key))
 
     async def on_channel_response(self, msg: bfcp_pb2.ChannelResponse, sender_key: RsaKey):
+        print("connManager.on_channel_res")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_channel_established(msg.channel_uuid, sender_key)
@@ -123,6 +128,7 @@ class ConnectionManager:
             await self._traffic_manager.send(msg, self._relay_channels[msg.channel_uuid][0])
 
     async def on_payload_received(self, msg: Union[bfcp_pb2.ToOriginalSender, bfcp_pb2.ToTargetServer], sender_key: RsaKey):
+        print("connManager.on_payload")
         receiver_type = self._check_conn_type(msg.channel_id.connection_uuid)
         if receiver_type == ConnectionType.origin:
             self._os_conn[msg.channel_id.connection_uuid].on_payload_received(msg, sender_key)
@@ -243,7 +249,7 @@ class OriginalSenderConnection:
         self._challenge_bytes: bytes = get_random_bytes(GLOBAL_VARS['SIGNATURE_CHALLENGE_BYTES'])
         self._session_key: Optional[bytes] = None
 
-    def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
+    async def initiate_connection(self, en_requirement: bfcp_pb2.EndNodeRequirement, ts_address: Tuple[str, int]):
         """
         This function can only be called once.
         @param en_requirement: EndNodeRequirement from client configurations.
@@ -262,7 +268,8 @@ class OriginalSenderConnection:
             pubkey_to_proto(self._sender_connection_key.publickey()))
         conn_request.signature_challenge = self._challenge_bytes
 
-        self._sync_send(conn_request)
+        print('sending conn request')
+        await self._traffic_manager.send(conn_request)
 
     async def on_end_node_found(self, conn_resp: bfcp_pb2.ConnectionResponse):
         if self._is_closed:
@@ -320,8 +327,7 @@ class OriginalSenderConnection:
                 self._future_packets[msg.index] = msg
 
             while self._next_recv_index in self._future_packets:
-                for callback in self._on_new_data:
-                    callback(msg.payload)
+                asyncio.gather(*[cb(msg.payload) for cb in self._on_new_data])
                 del(self._future_packets[self._next_recv_index])
                 self._next_recv_index += 1
 
@@ -329,14 +335,14 @@ class OriginalSenderConnection:
             # Connection is ready to be closed
             self._close_internal()
 
-    async def _send_internal(self, data: bytes):
+    async def send(self, data: bytes):
+        print('sending')
         bouncy_tcp_msg = bfcp_pb2.BouncyTcpMessage()
         bouncy_tcp_msg.payload = data
         bouncy_tcp_msg.index = self._next_send_index
         self._next_send_index += 1
 
-        encrypted_tcp_msg = utils.aes_encrypt(bouncy_tcp_msg.SerializeToString(),
-                                              self._session_key)
+        encrypted_tcp_msg = utils.aes_encrypt(bouncy_tcp_msg.SerializeToString(), self._session_key)
 
         for (channel_uuid, next_hop_pub_key) in self._channels:
             msg = bfcp_pb2.ToTargetServer()
@@ -347,14 +353,6 @@ class OriginalSenderConnection:
 
             await self._traffic_manager.send(msg, next_hop_pub_key)
 
-    def send(self, data: bytes):
-        """
-        Sends the specified data to the target server. This is a non-blocking call
-        """
-        if data != b'':
-            asyncio.run_coroutine_threadsafe(self._send_internal(data),
-                                             self._traffic_manager.get_loop())
-
     def close(self):
         """
         Closes the connection with the target server.
@@ -362,7 +360,7 @@ class OriginalSenderConnection:
         asyncio.ensure_future(self._send_internal(b''))
         self._close_internal()
 
-    def register_on_new_data(self, callback: Callable[[bytes], None]) -> None:
+    def register_on_new_data(self, callback) -> None:
         """
         Registers a callback for whenever new data is available from the target server. The callback
         will be called with the bytes retrieved from the connection.
@@ -405,10 +403,6 @@ class OriginalSenderConnection:
         passed into register_on_closed().
         """
         self._on_closed.remove(callback)
-
-    def _sync_send(self, msg: bfcp_pb2.BouncyMessage, pub_key: Optional[bytes] = None):
-        asyncio.run_coroutine_threadsafe(self._traffic_manager.send(msg, pub_key),
-                                         self._traffic_manager.get_loop())
 
     def _make_channel_length(self):
         return randint(GLOBAL_VARS['MIN_CHANNEL_LENGTH'], GLOBAL_VARS['MAX_CHANNEL_LENGTH'])
